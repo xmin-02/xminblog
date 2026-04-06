@@ -94,6 +94,12 @@ interface GHTreeItem {
   sha: string;
 }
 
+function b64DecodeUnicode(str: string): string {
+  const binary = atob(str.replace(/\n/g, ''));
+  const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
 async function ghGet<T>(path: string, token: string): Promise<T> {
   const res = await fetch(`https://api.github.com/${path}`, {
     headers: {
@@ -230,7 +236,7 @@ async function listPosts(env: Env, origin: string | null): Promise<Response> {
         const slug = item.path.replace(`${CONTENT_PATH}/`, '').replace(/\.md$/, '');
         try {
           const file = await ghGet<GHFile>(`repos/${owner}/${repo}/contents/${item.path}?ref=${branch}`, token);
-          const raw = atob(file.content.replace(/\n/g, ''));
+          const raw = b64DecodeUnicode(file.content);
           const { meta } = parseFrontmatter(raw);
           return {
             slug,
@@ -259,7 +265,7 @@ async function getPost(slug: string, env: Env, origin: string | null): Promise<R
   const filePath = `${CONTENT_PATH}/${slug}.md`;
   try {
     const file = await ghGet<GHFile>(`repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`, token);
-    const raw = atob(file.content.replace(/\n/g, ''));
+    const raw = b64DecodeUnicode(file.content);
     const { meta, body } = parseFrontmatter(raw);
     return json({ slug, ...meta, content: body, sha: file.sha }, 200, origin);
   } catch (err) {
