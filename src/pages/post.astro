@@ -3,28 +3,140 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="xmin.blog">
-  <article class="mx-auto max-w-3xl px-6 py-16" id="post-container">
-    <div class="text-center py-20 text-[var(--color-text-secondary)]" id="post-loading">
-      Loading...
+  <div class="mx-auto max-w-6xl px-4 sm:px-5 py-8">
+    <div class="flex gap-7 items-start">
+
+      <!-- ===== ARTICLE AREA ===== -->
+      <main class="flex-1 min-w-0">
+        <div id="post-container">
+          <div class="text-center py-20 text-[var(--color-text-secondary)]" id="post-loading">
+            <div class="inline-block w-6 h-6 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p class="text-sm">글을 불러오는 중...</p>
+          </div>
+        </div>
+      </main>
+
+      <!-- ===== SIDEBAR ===== -->
+      <aside class="w-64 shrink-0 hidden lg:block sticky top-20">
+
+        <!-- Profile card -->
+        <div class="sidebar-widget">
+          <div class="flex flex-col items-center text-center py-2">
+            <div class="w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-bold mb-2.5" style="background: linear-gradient(135deg, #0d9488, #0f766e);">
+              x
+            </div>
+            <p class="font-bold text-[var(--color-text)] text-sm">주수민 <span class="font-normal text-[var(--color-text-secondary)]">/ xmin</span></p>
+            <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">보안 · AI</p>
+            <a href="/" class="mt-3 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors" style="background:rgba(13,148,136,0.1);color:var(--color-accent);">
+              글 목록 보기
+            </a>
+          </div>
+        </div>
+
+        <!-- Table of contents -->
+        <div class="sidebar-widget" id="toc-widget" style="display:none;">
+          <p class="sidebar-widget-title">목차</p>
+          <nav id="toc-nav" class="space-y-1 text-xs"></nav>
+        </div>
+
+        <!-- Recent posts -->
+        <div class="sidebar-widget">
+          <p class="sidebar-widget-title">최근 글</p>
+          <ul id="sidebar-recent" class="space-y-2.5">
+            <li class="text-xs text-[var(--color-text-secondary)]">불러오는 중...</li>
+          </ul>
+        </div>
+
+      </aside>
     </div>
-  </article>
+  </div>
 </BaseLayout>
+
+<style is:global>
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .animate-spin {
+    animation: spin 0.8s linear infinite;
+  }
+
+  .post-nav-link {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.875rem 1rem;
+    border-radius: 0.625rem;
+    background-color: var(--color-bg-card);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.2s, transform 0.15s;
+    text-decoration: none;
+    color: inherit;
+    flex: 1;
+    min-width: 0;
+  }
+  .post-nav-link:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+  }
+  .post-nav-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+  .post-nav-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.15s;
+  }
+  .post-nav-link:hover .post-nav-title {
+    color: var(--color-accent);
+  }
+
+  .toc-link {
+    display: block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.35rem;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    transition: color 0.15s, background-color 0.15s;
+    line-height: 1.4;
+  }
+  .toc-link:hover, .toc-link.active {
+    color: var(--color-accent);
+    background-color: rgba(13,148,136,0.08);
+  }
+  .toc-h3 {
+    padding-left: 1rem;
+    font-size: 0.7rem;
+  }
+  .toc-h2 {
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+</style>
 
 <script is:inline>
   const API_BASE = 'https://blog-api.aidi1030.workers.dev';
 
   function esc(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   function renderMarkdown(md) {
     let html = md
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code.trimEnd()}</code></pre>`);
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+      `<pre><code class="language-${lang || 'text'}">${code.trimEnd()}</code></pre>`);
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
     html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />');
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
     html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
     html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
@@ -49,52 +161,144 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }).join('\n');
   }
 
+  function buildToc(container) {
+    const headings = container.querySelectorAll('h2, h3');
+    if (headings.length < 2) return;
+
+    const tocWidget = document.getElementById('toc-widget');
+    const tocNav = document.getElementById('toc-nav');
+    if (!tocWidget || !tocNav) return;
+
+    tocWidget.style.display = '';
+    let idCounter = 0;
+    const links = [];
+
+    headings.forEach(h => {
+      idCounter++;
+      const id = `heading-${idCounter}`;
+      h.id = id;
+      const isH3 = h.tagName === 'H3';
+      const a = document.createElement('a');
+      a.href = `#${id}`;
+      a.className = `toc-link ${isH3 ? 'toc-h3' : 'toc-h2'}`;
+      a.textContent = h.textContent;
+      tocNav.appendChild(a);
+      links.push({ el: h, a });
+    });
+
+    // Intersection observer for active TOC link
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        const link = links.find(l => l.el === entry.target);
+        if (link) link.a.classList.toggle('active', entry.isIntersecting);
+      });
+    }, { rootMargin: '-10% 0px -80% 0px' });
+
+    headings.forEach(h => obs.observe(h));
+  }
+
   async function loadPost() {
     const slug = decodeURIComponent(window.location.hash.slice(1));
-
-    if (!slug) {
-      window.location.href = '/';
-      return;
-    }
+    if (!slug) { window.location.href = '/'; return; }
 
     const container = document.getElementById('post-container');
 
     try {
-      const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`);
-      if (!res.ok) throw new Error('Post not found');
-      const post = await res.json();
+      // Fetch current post and all posts in parallel
+      const [postRes, allRes] = await Promise.all([
+        fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`),
+        fetch(`${API_BASE}/api/posts`),
+      ]);
+
+      if (!postRes.ok) throw new Error('Post not found');
+      const post = await postRes.json();
+      const allPosts = allRes.ok ? (await allRes.json()).filter(p => !p.draft) : [];
 
       document.title = `${post.title} — xmin.blog`;
 
-      const date = post.date ? new Date(post.date).toISOString().split('T')[0] : '';
+      const date = post.date
+        ? new Date(post.date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+        : '';
+
       const tags = (post.tags || []).map(t =>
-        `<span class="px-2 py-1 rounded-full text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">${esc(t)}</span>`
+        `<span class="px-2.5 py-1 rounded-full text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">${esc(t)}</span>`
       ).join('');
 
+      // Prev / next post
+      const idx = allPosts.findIndex(p => p.slug === slug);
+      const prev = idx > 0 ? allPosts[idx - 1] : null;
+      const next = idx < allPosts.length - 1 ? allPosts[idx + 1] : null;
+
+      const navHtml = (prev || next) ? `
+        <div class="flex gap-3 mt-12">
+          ${prev ? `<a href="/post#${esc(prev.slug)}" class="post-nav-link">
+            <span class="post-nav-label">← 이전 글</span>
+            <span class="post-nav-title">${esc(prev.title)}</span>
+          </a>` : '<div class="flex-1"></div>'}
+          ${next ? `<a href="/post#${esc(next.slug)}" class="post-nav-link" style="text-align:right;">
+            <span class="post-nav-label">다음 글 →</span>
+            <span class="post-nav-title">${esc(next.title)}</span>
+          </a>` : '<div class="flex-1"></div>'}
+        </div>` : '';
+
+      const wordCount = (post.content || '').replace(/<[^>]+>/g, '').split(/\s+/).length;
+      const readTime = Math.max(1, Math.round(wordCount / 200));
+
       container.innerHTML = `
-        <header class="mb-12">
-          <div class="flex items-center gap-3 mb-4">
-            <span class="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">${esc(post.category)}</span>
-            <time class="text-sm font-mono text-[var(--color-text-secondary)]">${date}</time>
+        <article>
+          <header class="mb-10 pb-8 border-b border-[var(--color-border)]">
+            <div class="flex flex-wrap items-center gap-2 mb-4">
+              ${post.category ? `<a href="/?category=${esc(post.category)}" class="text-xs font-semibold px-3 py-1 rounded-full transition-colors" style="background:rgba(13,148,136,0.1);color:var(--color-accent);">${esc(post.category)}</a>` : ''}
+              <span class="text-xs text-[var(--color-text-secondary)]">${esc(date)}</span>
+              <span class="text-xs text-[var(--color-text-secondary)]">· ${readTime}분 읽기</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold leading-snug mb-4 tracking-tight" style="font-family:var(--font-display);color:var(--color-text);">${esc(post.title)}</h1>
+            <p class="text-base text-[var(--color-text-secondary)] leading-relaxed">${esc(post.description)}</p>
+            ${tags ? `<div class="flex flex-wrap gap-2 mt-4">${tags}</div>` : ''}
+          </header>
+
+          <div class="prose prose-lg max-w-none" id="prose-content">${renderMarkdown(post.content || '')}</div>
+
+          ${navHtml}
+
+          <div class="mt-10 pt-6 border-t border-[var(--color-border)]">
+            <a href="/" class="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+              </svg>
+              목록으로 돌아가기
+            </a>
           </div>
-          <h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-4" style="font-family: var(--font-display);">${esc(post.title)}</h1>
-          <p class="text-lg text-[var(--color-text-secondary)]">${esc(post.description)}</p>
-          ${tags ? `<div class="flex flex-wrap gap-2 mt-4">${tags}</div>` : ''}
-          <hr class="mt-8 border-[var(--color-border)]" />
-        </header>
-        <div class="prose prose-lg max-w-none">${renderMarkdown(post.content || '')}</div>
-        <footer class="mt-16 pt-8 border-t border-[var(--color-border)]">
-          <a href="/" class="inline-flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-primary transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-            목록으로 돌아가기
-          </a>
-        </footer>
+        </article>
       `;
+
+      // Build TOC from rendered content
+      const proseEl = document.getElementById('prose-content');
+      if (proseEl) buildToc(proseEl);
+
+      // Populate sidebar recent posts
+      const recentEl = document.getElementById('sidebar-recent');
+      if (recentEl && allPosts.length) {
+        const recent = allPosts.filter(p => p.slug !== slug).slice(0, 5);
+        recentEl.innerHTML = recent.map(p => {
+          const d = p.date ? new Date(p.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
+          return `<li>
+            <a href="/post#${esc(p.slug)}" class="block group">
+              <p class="text-xs font-medium text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors line-clamp-2 leading-snug">${esc(p.title)}</p>
+              <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">${esc(d)}</p>
+            </a>
+          </li>`;
+        }).join('');
+      }
+
     } catch (err) {
       container.innerHTML = `
         <div class="text-center py-20 text-[var(--color-text-secondary)]">
-          <p class="text-lg">글을 찾을 수 없습니다.</p>
-          <a href="/" class="text-sm text-primary hover:underline mt-4 inline-block">홈으로 돌아가기</a>
+          <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <p class="text-base font-medium mb-2">글을 찾을 수 없습니다.</p>
+          <a href="/" class="text-sm text-[var(--color-accent)] hover:underline">홈으로 돌아가기</a>
         </div>`;
     }
   }

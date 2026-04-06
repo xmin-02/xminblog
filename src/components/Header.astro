@@ -1,47 +1,71 @@
 ---
 const pathname = Astro.url.pathname;
-const navItems = [
-  { href: '/', label: '블로그' },
-  { href: '/about', label: '소개' },
-];
 ---
 
-<header class="sticky top-0 z-50 backdrop-blur-lg bg-[var(--color-bg)]/80 border-b border-[var(--color-border)]">
-  <div class="mx-auto max-w-3xl px-6 h-16 flex items-center justify-between">
-    <a href="/" class="text-lg font-bold tracking-tight hover:text-primary transition-colors" style="font-family: var(--font-display);">
-      xmin<span class="text-[var(--color-accent)]">.</span>blog
+<header class="sticky top-0 z-50 backdrop-blur-md bg-[var(--color-bg-card)]/90 border-b border-[var(--color-border)]" style="box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+  <div class="mx-auto max-w-6xl px-5 h-14 flex items-center justify-between">
+    <!-- Logo -->
+    <a href="/" class="flex items-center gap-2 group" style="font-family: var(--font-display);">
+      <span class="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold" style="background: linear-gradient(135deg, #0d9488, #0f766e);">x</span>
+      <span class="text-base font-bold tracking-tight group-hover:text-[var(--color-accent)] transition-colors">
+        xmin<span class="text-[var(--color-accent)]">.</span>blog
+      </span>
     </a>
-    <div class="flex items-center gap-6">
-      {navItems.map(item => (
-        <a
-          href={item.href}
-          class:list={[
-            'text-sm font-medium transition-colors',
-            pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
-              ? 'text-[var(--color-text)]'
-              : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]',
-          ]}
-        >
-          {item.label}
-        </a>
-      ))}
+
+    <!-- Right controls -->
+    <div class="flex items-center gap-1">
+      <a
+        href="/"
+        class:list={[
+          'hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+          pathname === '/'
+            ? 'text-[var(--color-accent)] bg-[rgba(13,148,136,0.08)]'
+            : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-secondary)]'
+        ]}
+      >
+        블로그
+      </a>
+      <a
+        href="/about"
+        class:list={[
+          'hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+          pathname === '/about'
+            ? 'text-[var(--color-accent)] bg-[rgba(13,148,136,0.08)]'
+            : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-secondary)]'
+        ]}
+      >
+        소개
+      </a>
       <a
         href="https://portfolio.xmincloud.com"
-        class="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
         target="_blank"
         rel="noopener"
+        class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-secondary)] transition-colors"
       >
         Portfolio
       </a>
+
+      <!-- Search button -->
+      <button
+        id="search-toggle"
+        class="p-2 rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+        aria-label="검색"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      </button>
+
+      <!-- Theme toggle -->
       <button
         id="theme-toggle"
-        class="p-2 rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors"
-        aria-label="Toggle theme"
+        class="p-2 rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+        aria-label="테마 전환"
       >
-        <svg class="w-5 h-5 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
         </svg>
-        <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
         </svg>
       </button>
@@ -54,5 +78,17 @@ const navItems = [
   toggle?.addEventListener('click', () => {
     const isDark = document.documentElement.classList.toggle('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  });
+
+  // Search toggle — scroll to search bar if on homepage, otherwise navigate
+  const searchToggle = document.getElementById('search-toggle');
+  searchToggle?.addEventListener('click', () => {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => searchInput.focus(), 300);
+    } else {
+      window.location.href = '/';
+    }
   });
 </script>

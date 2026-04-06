@@ -3,106 +3,309 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="xmin.blog">
-  <section class="mx-auto max-w-3xl px-6 py-16">
-    <div class="mb-12">
-      <h1 class="text-4xl font-bold tracking-tight mb-3" style="font-family: var(--font-display);">
-        Blog
-      </h1>
-      <p class="text-lg text-[var(--color-text-secondary)]">
-        보안, AI, 개발에 대한 이야기
-      </p>
-    </div>
+  <div class="mx-auto max-w-6xl px-4 sm:px-5 py-8">
+    <div class="flex gap-7 items-start">
 
-    <!-- Category Filter -->
-    <div class="flex flex-wrap gap-2 mb-10" id="category-filter"></div>
+      <!-- ===== MAIN CONTENT ===== -->
+      <main class="flex-1 min-w-0">
 
-    <!-- Post List -->
-    <div id="post-list">
-      <div class="text-center py-10 text-[var(--color-text-secondary)]" id="loading">
-        Loading...
-      </div>
+        <!-- Search bar -->
+        <div class="mb-6 relative">
+          <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            id="search-input"
+            type="text"
+            placeholder="글 검색..."
+            class="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border border-[var(--color-border)] bg-[var(--color-bg-card)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+            style="box-shadow: var(--shadow-card);"
+          />
+        </div>
+
+        <!-- Category filter (horizontal scroll) -->
+        <div class="flex gap-2 mb-6 overflow-x-auto pb-1 scrollbar-none" id="category-filter-bar"></div>
+
+        <!-- Post list -->
+        <div id="post-list">
+          <div class="text-center py-20 text-[var(--color-text-secondary)]" id="loading">
+            <div class="inline-block w-6 h-6 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p class="text-sm">글을 불러오는 중...</p>
+          </div>
+        </div>
+      </main>
+
+      <!-- ===== SIDEBAR ===== -->
+      <aside class="w-64 shrink-0 hidden lg:block sticky top-20">
+
+        <!-- Profile card -->
+        <div class="sidebar-widget">
+          <div class="flex flex-col items-center text-center py-2">
+            <div class="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold mb-3" style="background: linear-gradient(135deg, #0d9488, #0f766e);">
+              x
+            </div>
+            <p class="font-bold text-[var(--color-text)] text-sm">주수민 <span class="font-normal text-[var(--color-text-secondary)]">/ xmin</span></p>
+            <p class="text-xs text-[var(--color-text-secondary)] mt-1">보안 · AI</p>
+            <div class="flex gap-2 mt-3">
+              <a href="https://github.com/xmin-02" target="_blank" rel="noopener" class="p-1.5 rounded-lg bg-[var(--color-bg)] hover:bg-[var(--color-bg-secondary)] transition-colors text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]" aria-label="GitHub">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                </svg>
+              </a>
+              <a href="https://portfolio.xmincloud.com" target="_blank" rel="noopener" class="p-1.5 rounded-lg bg-[var(--color-bg)] hover:bg-[var(--color-bg-secondary)] transition-colors text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]" aria-label="Portfolio">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category list -->
+        <div class="sidebar-widget">
+          <p class="sidebar-widget-title">카테고리</p>
+          <ul id="sidebar-categories" class="space-y-0.5">
+            <li><button data-category="all" class="cat-item active w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm transition-colors hover:bg-[var(--color-bg)] text-left">
+              <span>전체</span><span class="text-xs text-[var(--color-text-secondary)]" id="cat-count-all">0</span>
+            </button></li>
+          </ul>
+        </div>
+
+        <!-- Recent posts -->
+        <div class="sidebar-widget">
+          <p class="sidebar-widget-title">최근 글</p>
+          <ul id="sidebar-recent" class="space-y-2.5">
+            <li class="text-xs text-[var(--color-text-secondary)]">불러오는 중...</li>
+          </ul>
+        </div>
+
+      </aside>
     </div>
-  </section>
+  </div>
 </BaseLayout>
 
 <style is:global>
-  .filter-btn.active {
-    background-color: var(--color-primary);
-    color: white;
-    border-color: var(--color-primary);
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
+  .animate-spin {
+    animation: spin 0.8s linear infinite;
+  }
+
+  .post-card {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 1.125rem 1.25rem;
+    border-radius: 0.75rem;
+    background-color: var(--color-bg-card);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.2s, transform 0.15s;
+    text-decoration: none;
+    color: inherit;
+    margin-bottom: 0.75rem;
+  }
+  .post-card:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+  }
+  .post-card:hover .post-card-title {
+    color: var(--color-accent);
+  }
+
+  .thumb-colors { background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); }
+  .thumb-colors-1 { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); }
+  .thumb-colors-2 { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+  .thumb-colors-3 { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
+  .thumb-colors-4 { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+  .thumb-colors-5 { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+  .thumb-colors-6 { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
 </style>
 
 <script is:inline>
   const API_BASE = 'https://blog-api.aidi1030.workers.dev';
+  let allPosts = [];
+  let activeCategory = 'all';
+  let searchQuery = '';
+
+  function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function thumbClass(category, index) {
+    const map = {
+      '보안': 'thumb-colors-1',
+      'AI': 'thumb-colors-4',
+      '개발': 'thumb-colors-5',
+      'Python': 'thumb-colors-6',
+      'JavaScript': 'thumb-colors-2',
+    };
+    return map[category] || `thumb-colors-${(index % 6) + 1}` || 'thumb-colors';
+  }
+
+  function initials(title) {
+    const t = String(title ?? '');
+    const char = t.trim()[0] || '?';
+    return esc(char);
+  }
+
+  function estimateReadTime(content) {
+    if (!content) return '1분';
+    const words = content.replace(/<[^>]+>/g, '').split(/\s+/).length;
+    const mins = Math.max(1, Math.round(words / 200));
+    return `${mins}분`;
+  }
+
+  function renderPosts(posts) {
+    const list = document.getElementById('post-list');
+    if (!posts.length) {
+      list.innerHTML = `<div class="text-center py-20 text-[var(--color-text-secondary)]">
+        <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <p class="text-sm">해당하는 글이 없습니다.</p>
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = posts.map((post, i) => {
+      const date = post.date ? new Date(post.date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+      const tc = thumbClass(post.category, i);
+      return `
+        <a href="/post#${esc(post.slug)}" class="post-card" data-category="${esc(post.category)}">
+          <div class="post-thumb w-16 h-16 sm:w-20 sm:h-20 ${tc} flex items-center justify-center text-white text-2xl font-bold rounded-xl shrink-0">
+            ${initials(post.title)}
+          </div>
+          <div class="flex-1 min-w-0 py-0.5">
+            <div class="flex items-center gap-2 mb-1.5">
+              ${post.category ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full" style="background:rgba(13,148,136,0.1);color:var(--color-accent);">${esc(post.category)}</span>` : ''}
+              <span class="text-xs text-[var(--color-text-secondary)]">${esc(date)}</span>
+              <span class="text-xs text-[var(--color-text-secondary)] hidden sm:inline">· ${estimateReadTime(post.content)} 읽기</span>
+            </div>
+            <h2 class="post-card-title text-base font-semibold leading-snug mb-1.5 line-clamp-2 transition-colors" style="color:var(--color-text);">${esc(post.title)}</h2>
+            <p class="text-sm text-[var(--color-text-secondary)] line-clamp-2 leading-relaxed">${esc(post.description)}</p>
+          </div>
+        </a>
+      `;
+    }).join('');
+  }
+
+  function filterAndSearch() {
+    let filtered = allPosts;
+    if (activeCategory !== 'all') {
+      filtered = filtered.filter(p => p.category === activeCategory);
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(p =>
+        (p.title || '').toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q) ||
+        (p.category || '').toLowerCase().includes(q)
+      );
+    }
+    renderPosts(filtered);
+
+    // Update active state on category filter bar
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.category === activeCategory);
+    });
+    document.querySelectorAll('.cat-item').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.category === activeCategory);
+    });
+  }
 
   async function loadPosts() {
-    const list = document.getElementById('post-list');
-    const filterWrap = document.getElementById('category-filter');
-    const loading = document.getElementById('loading');
-
     try {
       const res = await fetch(`${API_BASE}/api/posts`);
       if (!res.ok) throw new Error('API error');
-      const allPosts = await res.json();
-      const posts = allPosts.filter(p => !p.draft);
+      const data = await res.json();
+      allPosts = data.filter(p => !p.draft);
 
-      loading.remove();
+      document.getElementById('loading')?.remove();
 
-      if (!posts.length) {
-        list.innerHTML = `
-          <div class="text-center py-20 text-[var(--color-text-secondary)]">
-            <p class="text-lg">아직 작성된 글이 없습니다.</p>
-            <p class="text-sm mt-2">곧 새로운 글이 올라올 예정입니다.</p>
-          </div>`;
-        return;
-      }
+      // Build categories
+      const catCounts = {};
+      allPosts.forEach(p => {
+        if (p.category) catCounts[p.category] = (catCounts[p.category] || 0) + 1;
+      });
+      const cats = Object.keys(catCounts);
 
-      // Build category filter
-      const cats = ['전체', ...new Set(posts.map(p => p.category).filter(Boolean))];
-      filterWrap.innerHTML = cats.map((cat, i) =>
-        `<button data-category="${cat === '전체' ? 'all' : esc(cat)}" class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium border border-[var(--color-border)] transition-all duration-200 ${i === 0 ? 'active' : 'text-[var(--color-text-secondary)]'}">${esc(cat)}</button>`
-      ).join('');
+      // Horizontal filter bar (top of main)
+      const filterBar = document.getElementById('category-filter-bar');
+      filterBar.innerHTML = ['전체', ...cats].map(cat => {
+        const isAll = cat === '전체';
+        const key = isAll ? 'all' : cat;
+        return `<button data-category="${esc(key)}" class="filter-btn shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all border border-[var(--color-border)] bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] whitespace-nowrap ${isAll ? 'active' : ''}">${esc(cat)}</button>`;
+      }).join('');
 
-      // Build post cards
-      list.innerHTML = '<div class="grid gap-4">' + posts.map(post => `
-        <div data-category="${esc(post.category)}">
-          <a href="/post#${esc(post.slug)}" class="card group block">
-            <div class="flex items-start gap-4 sm:gap-6">
-              <time class="text-sm font-mono text-[var(--color-text-secondary)] shrink-0 pt-0.5">${post.date || ''}</time>
-              <div class="flex-1 min-w-0">
-                <h2 class="text-lg font-semibold group-hover:text-primary transition-colors">${esc(post.title)}</h2>
-                <p class="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-2">${esc(post.description)}</p>
-                <div class="flex flex-wrap items-center gap-2 mt-3">
-                  <span class="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">${esc(post.category)}</span>
-                  ${(post.tags || []).map(t => `<span class="px-2 py-1 rounded-full text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg)] border border-[var(--color-border)]">${esc(t)}</span>`).join('')}
-                </div>
-              </div>
-            </div>
-          </a>
-        </div>
-      `).join('') + '</div>';
-
-      // Category filter click
-      filterWrap.querySelectorAll('.filter-btn').forEach(btn => {
+      filterBar.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          filterWrap.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          const cat = btn.dataset.category;
-          list.querySelectorAll('[data-category]').forEach(card => {
-            card.style.display = (cat === 'all' || card.dataset.category === cat) ? '' : 'none';
-          });
+          activeCategory = btn.dataset.category;
+          filterAndSearch();
         });
       });
 
+      // Sidebar category list
+      const sidebarCats = document.getElementById('sidebar-categories');
+      const allCount = document.getElementById('cat-count-all');
+      if (allCount) allCount.textContent = allPosts.length;
+
+      cats.forEach(cat => {
+        const li = document.createElement('li');
+        li.innerHTML = `<button data-category="${esc(cat)}" class="cat-item w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm transition-colors hover:bg-[var(--color-bg)] text-left">
+          <span>${esc(cat)}</span><span class="text-xs text-[var(--color-text-secondary)]">${catCounts[cat]}</span>
+        </button>`;
+        sidebarCats?.appendChild(li);
+      });
+
+      // Update sidebar "전체" button count
+      const allBtn = sidebarCats?.querySelector('[data-category="all"]');
+      if (allBtn) {
+        const span = allBtn.querySelector('span:last-child');
+        if (span) span.textContent = allPosts.length;
+      }
+
+      sidebarCats?.querySelectorAll('.cat-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          activeCategory = btn.dataset.category;
+          filterAndSearch();
+        });
+      });
+
+      // Sidebar recent posts
+      const recentEl = document.getElementById('sidebar-recent');
+      if (recentEl) {
+        const recent = allPosts.slice(0, 5);
+        recentEl.innerHTML = recent.map(p => {
+          const date = p.date ? new Date(p.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
+          return `<li>
+            <a href="/post#${esc(p.slug)}" class="block group">
+              <p class="text-xs font-medium text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors line-clamp-2 leading-snug">${esc(p.title)}</p>
+              <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">${esc(date)}</p>
+            </a>
+          </li>`;
+        }).join('');
+      }
+
+      // Search
+      const searchInput = document.getElementById('search-input');
+      searchInput?.addEventListener('input', e => {
+        searchQuery = e.target.value.trim();
+        filterAndSearch();
+      });
+
+      renderPosts(allPosts);
+
     } catch (err) {
-      loading.textContent = '글을 불러오지 못했습니다.';
+      const loading = document.getElementById('loading');
+      if (loading) {
+        loading.innerHTML = '<p class="text-sm">글을 불러오지 못했습니다.</p>';
+      }
       console.error(err);
     }
-  }
-
-  function esc(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   loadPosts();
