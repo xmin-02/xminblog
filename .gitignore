@@ -25,3 +25,6 @@ pnpm-debug.log*
 
 # omc state
 .omc/
+
+# wrangler local state
+.wrangler/

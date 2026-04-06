@@ -1,12 +1,5 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import BlogCard from '../components/BlogCard.astro';
-import { getCollection } from 'astro:content';
-
-const posts = (await getCollection('blog', ({ data }) => !data.draft))
-  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
-
-const categories = ['전체', ...new Set(posts.map(p => p.data.category))];
 ---
 
 <BaseLayout title="xmin.blog">
@@ -21,42 +14,14 @@ const categories = ['전체', ...new Set(posts.map(p => p.data.category))];
     </div>
 
     <!-- Category Filter -->
-    <div class="flex flex-wrap gap-2 mb-10" id="category-filter">
-      {categories.map((cat, i) => (
-        <button
-          data-category={cat === '전체' ? 'all' : cat}
-          class:list={[
-            'filter-btn px-4 py-1.5 rounded-full text-sm font-medium border border-[var(--color-border)] transition-all duration-200',
-            i === 0 ? 'active' : 'text-[var(--color-text-secondary)]',
-          ]}
-        >
-          {cat}
-        </button>
-      ))}
-    </div>
+    <div class="flex flex-wrap gap-2 mb-10" id="category-filter"></div>
 
     <!-- Post List -->
-    <div class="grid gap-4" id="post-list">
-      {posts.map(post => (
-        <div data-category={post.data.category}>
-          <BlogCard
-            title={post.data.title}
-            description={post.data.description}
-            date={post.data.date}
-            category={post.data.category}
-            tags={post.data.tags}
-            slug={post.id}
-          />
-        </div>
-      ))}
-    </div>
-
-    {posts.length === 0 && (
-      <div class="text-center py-20 text-[var(--color-text-secondary)]">
-        <p class="text-lg">아직 작성된 글이 없습니다.</p>
-        <p class="text-sm mt-2">곧 새로운 글이 올라올 예정입니다.</p>
+    <div id="post-list">
+      <div class="text-center py-10 text-[var(--color-text-secondary)]" id="loading">
+        Loading...
       </div>
-    )}
+    </div>
   </section>
 </BaseLayout>
 
@@ -69,15 +34,76 @@ const categories = ['전체', ...new Set(posts.map(p => p.data.category))];
 </style>
 
 <script is:inline>
-  document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+  const API_BASE = 'https://blog-api.aidi1030.workers.dev';
 
-      const cat = btn.dataset.category;
-      document.querySelectorAll('#post-list > div').forEach(card => {
-        card.style.display = (cat === 'all' || card.dataset.category === cat) ? '' : 'none';
+  async function loadPosts() {
+    const list = document.getElementById('post-list');
+    const filterWrap = document.getElementById('category-filter');
+    const loading = document.getElementById('loading');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/posts`);
+      if (!res.ok) throw new Error('API error');
+      const allPosts = await res.json();
+      const posts = allPosts.filter(p => !p.draft);
+
+      loading.remove();
+
+      if (!posts.length) {
+        list.innerHTML = `
+          <div class="text-center py-20 text-[var(--color-text-secondary)]">
+            <p class="text-lg">아직 작성된 글이 없습니다.</p>
+            <p class="text-sm mt-2">곧 새로운 글이 올라올 예정입니다.</p>
+          </div>`;
+        return;
+      }
+
+      // Build category filter
+      const cats = ['전체', ...new Set(posts.map(p => p.category).filter(Boolean))];
+      filterWrap.innerHTML = cats.map((cat, i) =>
+        `<button data-category="${cat === '전체' ? 'all' : esc(cat)}" class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium border border-[var(--color-border)] transition-all duration-200 ${i === 0 ? 'active' : 'text-[var(--color-text-secondary)]'}">${esc(cat)}</button>`
+      ).join('');
+
+      // Build post cards
+      list.innerHTML = '<div class="grid gap-4">' + posts.map(post => `
+        <div data-category="${esc(post.category)}">
+          <a href="/blog/${esc(post.slug)}" class="card group block">
+            <div class="flex items-start gap-4 sm:gap-6">
+              <time class="text-sm font-mono text-[var(--color-text-secondary)] shrink-0 pt-0.5">${post.date || ''}</time>
+              <div class="flex-1 min-w-0">
+                <h2 class="text-lg font-semibold group-hover:text-primary transition-colors">${esc(post.title)}</h2>
+                <p class="text-sm text-[var(--color-text-secondary)] mt-1 line-clamp-2">${esc(post.description)}</p>
+                <div class="flex flex-wrap items-center gap-2 mt-3">
+                  <span class="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">${esc(post.category)}</span>
+                  ${(post.tags || []).map(t => `<span class="px-2 py-1 rounded-full text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg)] border border-[var(--color-border)]">${esc(t)}</span>`).join('')}
+                </div>
+              </div>
+            </div>
+          </a>
+        </div>
+      `).join('') + '</div>';
+
+      // Category filter click
+      filterWrap.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          filterWrap.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const cat = btn.dataset.category;
+          list.querySelectorAll('[data-category]').forEach(card => {
+            card.style.display = (cat === 'all' || card.dataset.category === cat) ? '' : 'none';
+          });
+        });
       });
-    });
-  });
+
+    } catch (err) {
+      loading.textContent = '글을 불러오지 못했습니다.';
+      console.error(err);
+    }
+  }
+
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  loadPosts();
 </script>

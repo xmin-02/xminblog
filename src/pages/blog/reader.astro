@@ -1,0 +1,104 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="xmin.blog">
+  <article class="mx-auto max-w-3xl px-6 py-16" id="post-container">
+    <div class="text-center py-20 text-[var(--color-text-secondary)]" id="post-loading">
+      Loading...
+    </div>
+  </article>
+</BaseLayout>
+
+<script is:inline>
+  const API_BASE = 'https://blog-api.aidi1030.workers.dev';
+
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderMarkdown(md) {
+    let html = md
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code.trimEnd()}</code></pre>`);
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />');
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+    html = html.replace(/^---$/gm, '<hr>');
+
+    return html.split(/\n{2,}/).map(block => {
+      const t = block.trim();
+      if (!t) return '';
+      if (/^<(h[1-6]|pre|blockquote|hr|img)/.test(t)) return t;
+      const listLines = t.split('\n');
+      if (listLines.every(l => /^[-*] /.test(l) || !l.trim())) {
+        return '<ul>' + listLines.map(l => { const m = l.match(/^[-*] (.+)/); return m ? `<li>${m[1]}</li>` : ''; }).join('') + '</ul>';
+      }
+      if (listLines.every(l => /^\d+\. /.test(l) || !l.trim())) {
+        return '<ol>' + listLines.map(l => { const m = l.match(/^\d+\. (.+)/); return m ? `<li>${m[1]}</li>` : ''; }).join('') + '</ol>';
+      }
+      return '<p>' + t.replace(/\n/g, '<br>') + '</p>';
+    }).join('\n');
+  }
+
+  async function loadPost() {
+    const path = window.location.pathname;
+    const slug = path.replace(/^\/blog\//, '').replace(/\/$/, '');
+
+    if (!slug) {
+      window.location.href = '/';
+      return;
+    }
+
+    const container = document.getElementById('post-container');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`);
+      if (!res.ok) throw new Error('Post not found');
+      const post = await res.json();
+
+      document.title = `${post.title} — xmin.blog`;
+
+      const date = post.date ? new Date(post.date).toISOString().split('T')[0] : '';
+      const tags = (post.tags || []).map(t =>
+        `<span class="px-2 py-1 rounded-full text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">${esc(t)}</span>`
+      ).join('');
+
+      container.innerHTML = `
+        <header class="mb-12">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">${esc(post.category)}</span>
+            <time class="text-sm font-mono text-[var(--color-text-secondary)]">${date}</time>
+          </div>
+          <h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-4" style="font-family: var(--font-display);">${esc(post.title)}</h1>
+          <p class="text-lg text-[var(--color-text-secondary)]">${esc(post.description)}</p>
+          ${tags ? `<div class="flex flex-wrap gap-2 mt-4">${tags}</div>` : ''}
+          <hr class="mt-8 border-[var(--color-border)]" />
+        </header>
+        <div class="prose prose-lg max-w-none">${renderMarkdown(post.content || '')}</div>
+        <footer class="mt-16 pt-8 border-t border-[var(--color-border)]">
+          <a href="/" class="inline-flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-primary transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+            목록으로 돌아가기
+          </a>
+        </footer>
+      `;
+    } catch (err) {
+      container.innerHTML = `
+        <div class="text-center py-20 text-[var(--color-text-secondary)]">
+          <p class="text-lg">글을 찾을 수 없습니다.</p>
+          <a href="/" class="text-sm text-primary hover:underline mt-4 inline-block">홈으로 돌아가기</a>
+        </div>`;
+    }
+  }
+
+  loadPost();
+</script>
