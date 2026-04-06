@@ -1,0 +1,14 @@
+name = "blog-api"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets (set via `wrangler secret put`):
+#   GITHUB_TOKEN   — GitHub Personal Access Token with repo write access
+#   ADMIN_PASSWORD — Plain-text admin password (worker hashes and compares)
+#
+# Optional vars (override defaults):
+# [vars]
+# GITHUB_OWNER = "xmin-02"
+# GITHUB_REPO  = "xminblog"
+# GITHUB_BRANCH = "main"

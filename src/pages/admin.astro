@@ -1,0 +1,449 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Admin — xmin.blog" description="Blog admin panel">
+  <!-- Auth Screen -->
+  <div id="auth-screen" class="mx-auto max-w-sm px-6 py-32">
+    <div class="card">
+      <h1 class="text-xl font-bold mb-6" style="font-family: var(--font-display);">
+        Admin<span class="text-[var(--color-accent)]">.</span>
+      </h1>
+      <form id="auth-form" class="flex flex-col gap-4">
+        <input
+          id="password-input"
+          type="password"
+          placeholder="Password"
+          autocomplete="current-password"
+          class="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors font-mono text-sm"
+        />
+        <button
+          type="submit"
+          class="w-full py-2.5 rounded-lg bg-[var(--color-accent)] text-white font-medium text-sm hover:bg-[var(--color-primary-dark)] transition-colors"
+        >
+          Enter
+        </button>
+        <p id="auth-error" class="text-red-500 text-sm text-center hidden">Incorrect password.</p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin Panel -->
+  <div id="admin-panel" class="hidden mx-auto max-w-5xl px-6 py-12">
+    <!-- Header bar -->
+    <div class="flex items-center justify-between mb-10">
+      <h1 class="text-2xl font-bold" style="font-family: var(--font-display);">
+        Admin Panel
+      </h1>
+      <div class="flex items-center gap-3">
+        <button
+          id="new-post-btn"
+          class="px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-primary-dark)] transition-colors"
+        >
+          + New Post
+        </button>
+        <button
+          id="logout-btn"
+          class="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] transition-colors"
+        >
+          Logout
+        </button>
+      </div>
+    </div>
+
+    <!-- Two-column layout: editor left, post list right -->
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+
+      <!-- Editor panel -->
+      <div id="editor-panel" class="lg:col-span-3 hidden">
+        <div class="card">
+          <div class="flex items-center justify-between mb-6">
+            <h2 id="editor-title-label" class="font-semibold text-[var(--color-text)]">New Post</h2>
+            <button id="cancel-edit-btn" class="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors">
+              Cancel
+            </button>
+          </div>
+
+          <!-- Metadata fields -->
+          <div class="flex flex-col gap-3 mb-6">
+            <input
+              id="field-title"
+              type="text"
+              placeholder="Title"
+              class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm"
+            />
+            <textarea
+              id="field-description"
+              placeholder="Description"
+              rows="2"
+              class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm resize-none"
+            ></textarea>
+            <div class="grid grid-cols-2 gap-3">
+              <input
+                id="field-date"
+                type="date"
+                class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm"
+              />
+              <input
+                id="field-category"
+                type="text"
+                placeholder="Category"
+                class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm"
+              />
+            </div>
+            <input
+              id="field-tags"
+              type="text"
+              placeholder="Tags (comma-separated)"
+              class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm"
+            />
+            <label class="flex items-center gap-2 text-sm text-[var(--color-text-secondary)] cursor-pointer select-none">
+              <input id="field-draft" type="checkbox" class="accent-[var(--color-accent)]" />
+              Save as draft
+            </label>
+          </div>
+
+          <!-- Editor / Preview tabs -->
+          <div class="flex gap-1 mb-3 border-b border-[var(--color-border)]">
+            <button id="tab-editor" class="tab-btn active px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors">
+              Markdown
+            </button>
+            <button id="tab-preview" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent -mb-px text-[var(--color-text-secondary)] transition-colors">
+              Preview
+            </button>
+          </div>
+
+          <div id="md-editor-wrap">
+            <textarea
+              id="field-content"
+              placeholder="Write your post in Markdown..."
+              rows="20"
+              class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm font-mono resize-y leading-relaxed"
+            ></textarea>
+          </div>
+
+          <div id="md-preview-wrap" class="hidden prose max-w-none min-h-48 px-2 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-secondary)]">
+          </div>
+
+          <!-- Save -->
+          <div class="flex items-center gap-3 mt-5">
+            <button
+              id="save-btn"
+              class="px-5 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-primary-dark)] transition-colors"
+            >
+              Save Post
+            </button>
+            <span id="save-status" class="text-sm text-[var(--color-text-secondary)]"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Post list panel -->
+      <div id="posts-panel" class="lg:col-span-2">
+        <div class="card">
+          <h2 class="font-semibold mb-4">Published Posts</h2>
+          <div id="posts-loading" class="text-sm text-[var(--color-text-secondary)] py-4 text-center">Loading…</div>
+          <ul id="posts-list" class="flex flex-col gap-2"></ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .tab-btn.active {
+    border-bottom-color: var(--color-accent);
+    color: var(--color-text);
+  }
+</style>
+
+<script is:inline>
+// ─── Config ────────────────────────────────────────────────────────────────
+// Replace this with the SHA-256 hash of your chosen password.
+// Generate: https://emn178.github.io/online-tools/sha256.html
+// Default placeholder hash (password: "changeme") — CHANGE BEFORE DEPLOYING
+const PASSWORD_HASH = '12bc9969f1043b58d204928c56edb62dfbfbe1b68674af046d52d7934c5ca1f5';
+
+const API_BASE = 'https://blog-api.aidi1030.workers.dev';
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+const authScreen = document.getElementById('auth-screen');
+const adminPanel = document.getElementById('admin-panel');
+
+function isAuthenticated() {
+  return sessionStorage.getItem('admin_auth') === 'true';
+}
+
+if (isAuthenticated()) {
+  authScreen.classList.add('hidden');
+  adminPanel.classList.remove('hidden');
+  loadPosts();
+}
+
+document.getElementById('auth-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pw = document.getElementById('password-input').value;
+  const hash = await sha256(pw);
+  if (hash === PASSWORD_HASH) {
+    sessionStorage.setItem('admin_auth', 'true');
+    authScreen.classList.add('hidden');
+    adminPanel.classList.remove('hidden');
+    loadPosts();
+  } else {
+    document.getElementById('auth-error').classList.remove('hidden');
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', () => {
+  sessionStorage.removeItem('admin_auth');
+  location.reload();
+});
+
+// ─── Editor state ───────────────────────────────────────────────────────────
+let editingSlug = null; // null = new post
+
+function openEditor(post = null) {
+  editingSlug = post ? post.slug : null;
+  document.getElementById('editor-title-label').textContent = post ? 'Edit Post' : 'New Post';
+  document.getElementById('field-title').value = post?.title ?? '';
+  document.getElementById('field-description').value = post?.description ?? '';
+  document.getElementById('field-date').value = post?.date ?? new Date().toISOString().slice(0, 10);
+  document.getElementById('field-category').value = post?.category ?? '';
+  document.getElementById('field-tags').value = post?.tags?.join(', ') ?? '';
+  document.getElementById('field-draft').checked = post?.draft ?? false;
+  document.getElementById('field-content').value = post?.content ?? '';
+  document.getElementById('save-status').textContent = '';
+  showTab('editor');
+  document.getElementById('editor-panel').classList.remove('hidden');
+  // On mobile, scroll to editor
+  document.getElementById('editor-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeEditor() {
+  editingSlug = null;
+  document.getElementById('editor-panel').classList.add('hidden');
+}
+
+document.getElementById('new-post-btn').addEventListener('click', () => openEditor());
+document.getElementById('cancel-edit-btn').addEventListener('click', closeEditor);
+
+// ─── Tabs ───────────────────────────────────────────────────────────────────
+function showTab(tab) {
+  const isEditor = tab === 'editor';
+  document.getElementById('md-editor-wrap').classList.toggle('hidden', !isEditor);
+  document.getElementById('md-preview-wrap').classList.toggle('hidden', isEditor);
+  document.getElementById('tab-editor').classList.toggle('active', isEditor);
+  document.getElementById('tab-preview').classList.toggle('active', !isEditor);
+  if (!isEditor) renderPreview();
+}
+
+document.getElementById('tab-editor').addEventListener('click', () => showTab('editor'));
+document.getElementById('tab-preview').addEventListener('click', () => showTab('preview'));
+
+// ─── Markdown preview (simple renderer) ─────────────────────────────────────
+function renderPreview() {
+  const md = document.getElementById('field-content').value;
+  document.getElementById('md-preview-wrap').innerHTML = simpleMarkdown(md);
+}
+
+function simpleMarkdown(md) {
+  return md
+    // Escape HTML
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // Code blocks
+    .replace(/```[\w]*\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    // Headings
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // Bold / italic
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    // Blockquote
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    // HR
+    .replace(/^---$/gm, '<hr>')
+    // Unordered list items
+    .replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>')
+    // Ordered list items
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    // Links
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    // Paragraphs (double newline)
+    .split(/\n{2,}/).map(block => {
+      if (/^<(h[1-6]|pre|blockquote|hr|ul|ol|li)/.test(block.trim())) return block;
+      if (block.trim() === '') return '';
+      // Wrap li items in ul
+      if (block.includes('<li>')) return '<ul>' + block.trim() + '</ul>';
+      return '<p>' + block.replace(/\n/g, '<br>') + '</p>';
+    }).join('\n');
+}
+
+// ─── Posts list ─────────────────────────────────────────────────────────────
+async function loadPosts() {
+  const loading = document.getElementById('posts-loading');
+  const list = document.getElementById('posts-list');
+  loading.textContent = 'Loading…';
+  list.innerHTML = '';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/posts`, {
+      headers: { 'X-Admin-Password': sessionStorage.getItem('admin_pw') ?? '' },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const posts = await res.json();
+    loading.classList.add('hidden');
+    if (!posts.length) {
+      list.innerHTML = '<li class="text-sm text-[var(--color-text-secondary)] py-2">No posts yet.</li>';
+      return;
+    }
+    posts.forEach(post => {
+      const li = document.createElement('li');
+      li.className = 'flex items-start justify-between gap-3 py-2 border-b border-[var(--color-border)] last:border-0';
+      li.innerHTML = `
+        <div class="min-w-0">
+          <p class="text-sm font-medium truncate text-[var(--color-text)]">${escHtml(post.title)}</p>
+          <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">${post.date} · ${escHtml(post.category)}</p>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <button data-slug="${escHtml(post.slug)}" class="edit-btn text-xs text-[var(--color-accent)] hover:underline">Edit</button>
+          <button data-slug="${escHtml(post.slug)}" class="del-btn text-xs text-red-500 hover:underline">Del</button>
+        </div>
+      `;
+      list.appendChild(li);
+    });
+
+    list.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => fetchAndEdit(btn.dataset.slug));
+    });
+    list.querySelectorAll('.del-btn').forEach(btn => {
+      btn.addEventListener('click', () => deletePost(btn.dataset.slug));
+    });
+  } catch (err) {
+    loading.textContent = 'Failed to load posts. Check API URL and CORS.';
+    console.error(err);
+  }
+}
+
+async function fetchAndEdit(slug) {
+  const status = document.getElementById('save-status');
+  status.textContent = '';
+  try {
+    const res = await fetch(`${API_BASE}/api/posts/${slug}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const post = await res.json();
+    openEditor({ ...post, slug });
+  } catch (err) {
+    alert('Failed to fetch post: ' + err.message);
+  }
+}
+
+async function deletePost(slug) {
+  if (!confirm(`Delete "${slug}"?`)) return;
+  const status = document.getElementById('save-status');
+  try {
+    const res = await fetch(`${API_BASE}/api/posts/${slug}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: getPasswordForApi() }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+    if (editingSlug === slug) closeEditor();
+    await loadPosts();
+  } catch (err) {
+    alert('Delete failed: ' + err.message);
+  }
+}
+
+// ─── Save ────────────────────────────────────────────────────────────────────
+document.getElementById('save-btn').addEventListener('click', async () => {
+  const status = document.getElementById('save-status');
+  const title = document.getElementById('field-title').value.trim();
+  const description = document.getElementById('field-description').value.trim();
+  const date = document.getElementById('field-date').value;
+  const category = document.getElementById('field-category').value.trim();
+  const tags = document.getElementById('field-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const draft = document.getElementById('field-draft').checked;
+  const content = document.getElementById('field-content').value;
+
+  if (!title || !date || !category || !content) {
+    status.textContent = 'Title, date, category and content are required.';
+    status.style.color = 'var(--color-accent)';
+    return;
+  }
+
+  status.textContent = 'Saving…';
+  status.style.color = 'var(--color-text-secondary)';
+
+  const payload = {
+    title, description, date, category, tags, draft, content,
+    password: getPasswordForApi(),
+  };
+
+  try {
+    let res;
+    if (editingSlug) {
+      res = await fetch(`${API_BASE}/api/posts/${editingSlug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } else {
+      res = await fetch(`${API_BASE}/api/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    }
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+
+    status.textContent = 'Saved!';
+    status.style.color = '#10b981';
+    if (!editingSlug) {
+      editingSlug = data.slug;
+      document.getElementById('editor-title-label').textContent = 'Edit Post';
+    }
+    await loadPosts();
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+    status.style.color = '#ef4444';
+  }
+});
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Also capture raw password in sessionStorage for API calls.
+// The worker independently hashes and verifies it server-side.
+document.getElementById('auth-form').addEventListener('submit', async function capture() {
+  const pw = document.getElementById('password-input').value;
+  const hash = await sha256(pw);
+  if (hash === PASSWORD_HASH) {
+    sessionStorage.setItem('admin_pw', pw);
+  }
+});
+
+if (isAuthenticated() && !sessionStorage.getItem('admin_pw')) {
+  // If already authenticated (page reload) but pw not in session, prompt once
+  const pw = prompt('Re-enter admin password for API access:');
+  if (pw) sessionStorage.setItem('admin_pw', pw);
+}
+
+function getPasswordForApi() {
+  return sessionStorage.getItem('admin_pw') ?? '';
+}
+</script>
+</BaseLayout>
