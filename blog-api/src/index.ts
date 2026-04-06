@@ -211,7 +211,7 @@ function parseFrontmatter(raw: string): { meta: Partial<PostMeta>; body: string 
 function slugify(title: string): string {
   return title
     .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
