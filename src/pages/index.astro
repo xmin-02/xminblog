@@ -67,7 +67,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       // Build post cards
       list.innerHTML = '<div class="grid gap-4">' + posts.map(post => `
         <div data-category="${esc(post.category)}">
-          <a href="/blog/${esc(post.slug)}" class="card group block">
+          <a href="/post#${esc(post.slug)}" class="card group block">
             <div class="flex items-start gap-4 sm:gap-6">
               <time class="text-sm font-mono text-[var(--color-text-secondary)] shrink-0 pt-0.5">${post.date || ''}</time>
               <div class="flex-1 min-w-0">

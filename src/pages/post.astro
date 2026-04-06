@@ -50,8 +50,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   async function loadPost() {
-    const path = window.location.pathname;
-    const slug = path.replace(/^\/blog\//, '').replace(/\/$/, '');
+    const slug = decodeURIComponent(window.location.hash.slice(1));
 
     if (!slug) {
       window.location.href = '/';
