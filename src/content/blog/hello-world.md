@@ -4,6 +4,7 @@ description: "xmin.blog를 시작하며, 앞으로 보안, AI, 개발에 대한 
 date: 2026-04-06
 category: "일반"
 tags: ["블로그", "소개"]
+draft: false
 ---
 
 ## xmin.blog를 시작합니다
@@ -20,3 +21,4 @@ tags: ["블로그", "소개"]
 - **세미나** — 발표 자료와 정리
 
 앞으로 많은 관심 부탁드립니다.
+
