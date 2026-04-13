@@ -58,13 +58,13 @@ const pathname = Astro.url.pathname;
 
       <!-- Auth button area -->
       <div id="auth-area" class="flex items-center">
-        <!-- Logged-out state -->
-        <a id="auth-login-btn" href="/login"
-          class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-secondary)] transition-colors">
+        <!-- Logged-out state (visibility controlled by JS via style, not class) -->
+        <a id="auth-login-btn" href="/login" style="display:none;"
+          class="sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-secondary)] transition-colors">
           로그인
         </a>
         <!-- Logged-in state -->
-        <div id="auth-user-menu" class="relative hidden">
+        <div id="auth-user-menu" class="relative" style="display:none;">
           <button id="auth-user-btn"
             class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors text-sm font-medium text-[var(--color-text)]"
             onclick="document.getElementById('auth-dropdown').classList.toggle('hidden')">
@@ -135,8 +135,8 @@ const pathname = Astro.url.pathname;
     if (token && userRaw) {
       try {
         const user = JSON.parse(userRaw);
-        loginBtn.classList.add('hidden');
-        userMenu.classList.remove('hidden');
+        loginBtn.style.display = 'none';
+        userMenu.style.display = '';
         const initials = (user.nickname || user.email || '?')[0].toUpperCase();
         document.getElementById('auth-avatar').textContent = initials;
         document.getElementById('auth-nickname').textContent = user.nickname || user.email.split('@')[0];
@@ -145,10 +145,12 @@ const pathname = Astro.url.pathname;
       } catch {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('auth_user');
+        loginBtn.style.display = 'inline-flex';
+        userMenu.style.display = 'none';
       }
     } else {
-      loginBtn.classList.remove('hidden');
-      userMenu.classList.add('hidden');
+      loginBtn.style.display = 'inline-flex';
+      userMenu.style.display = 'none';
     }
   }
 
