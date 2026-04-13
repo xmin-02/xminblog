@@ -621,13 +621,17 @@ export default {
       return listPosts(env, origin);
     }
 
-    // Mutating post routes — require admin password
+    // Mutating post routes — require admin JWT or legacy password
     let body: Partial<PostPayload> = {};
-    try { body = await request.json() as Partial<PostPayload>; } catch { return json({ error: 'Invalid JSON body' }, 400, origin); }
+    try { body = await request.json() as Partial<PostPayload>; } catch { /* empty body ok for DELETE with JWT */ }
 
-    const password = (body.password as string) ?? request.headers.get('X-Admin-Password') ?? '';
-    if (!(await verifyAdminPassword(password, env))) {
-      return json({ error: 'Unauthorized' }, 401, origin);
+    const authUser = await getAuthUser(request, env);
+    const isAdminJWT = authUser?.role === 'admin';
+    if (!isAdminJWT) {
+      const password = (body.password as string) ?? request.headers.get('X-Admin-Password') ?? '';
+      if (!(await verifyAdminPassword(password, env))) {
+        return json({ error: 'Unauthorized' }, 401, origin);
+      }
     }
 
     if (method === 'POST' && !slug) {

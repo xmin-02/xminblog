@@ -123,6 +123,24 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   .thumb-colors-4 { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
   .thumb-colors-5 { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
   .thumb-colors-6 { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+
+  .post-card-wrap { position: relative; }
+  .admin-card-btns {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    display: flex; gap: 0.25rem;
+    opacity: 0; transition: opacity 0.15s;
+    pointer-events: none;
+  }
+  .post-card-wrap:hover .admin-card-btns { opacity: 1; pointer-events: auto; }
+  .admin-card-btn {
+    width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--color-bg-card); border: 1px solid var(--color-border);
+    color: var(--color-text-secondary); cursor: pointer;
+    text-decoration: none; transition: all 0.15s; padding: 0;
+  }
+  .admin-card-btn:hover { background: var(--color-accent); color: white; border-color: var(--color-accent); }
+  .admin-card-btn.del:hover { background: #ef4444; border-color: #ef4444; }
 </style>
 
 <script is:inline>
@@ -159,8 +177,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return `${mins}분`;
   }
 
+  function isAdminUser() {
+    try { return JSON.parse(localStorage.getItem('auth_user') || '{}').role === 'admin'; } catch { return false; }
+  }
+
   function renderPosts(posts) {
     const list = document.getElementById('post-list');
+    const isAdmin = isAdminUser();
     if (!posts.length) {
       list.innerHTML = `<div class="text-center py-20 text-[var(--color-text-secondary)]">
         <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -174,23 +197,56 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     list.innerHTML = posts.map((post, i) => {
       const date = post.date ? new Date(post.date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
       const tc = thumbClass(post.category, i);
+      const adminBtns = isAdmin ? `
+        <div class="admin-card-btns">
+          <a href="/admin?edit=${esc(post.slug)}" class="admin-card-btn" title="편집" onclick="event.stopPropagation();">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </a>
+          <button class="admin-card-btn del" title="삭제" onclick="event.preventDefault();event.stopPropagation();adminDeletePost('${esc(post.slug)}');">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>` : '';
       return `
-        <a href="/post#${esc(post.slug)}" class="post-card" data-category="${esc(post.category)}">
-          <div class="post-thumb w-16 h-16 sm:w-20 sm:h-20 ${tc} flex items-center justify-center text-white text-2xl font-bold rounded-xl shrink-0">
-            ${initials(post.title)}
-          </div>
-          <div class="flex-1 min-w-0 py-0.5">
-            <div class="flex items-center gap-2 mb-1.5">
-              ${post.category ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full" style="background:rgba(13,148,136,0.1);color:var(--color-accent);">${esc(post.category)}</span>` : ''}
-              <span class="text-xs text-[var(--color-text-secondary)]">${esc(date)}</span>
-              <span class="text-xs text-[var(--color-text-secondary)] hidden sm:inline">· ${estimateReadTime(post.content)} 읽기</span>
+        <div class="post-card-wrap">
+          <a href="/post#${esc(post.slug)}" class="post-card" data-category="${esc(post.category)}">
+            <div class="post-thumb w-16 h-16 sm:w-20 sm:h-20 ${tc} flex items-center justify-center text-white text-2xl font-bold rounded-xl shrink-0">
+              ${initials(post.title)}
             </div>
-            <h2 class="post-card-title text-base font-semibold leading-snug mb-1.5 line-clamp-2 transition-colors" style="color:var(--color-text);">${esc(post.title)}</h2>
-            <p class="text-sm text-[var(--color-text-secondary)] line-clamp-2 leading-relaxed">${esc(post.description)}</p>
-          </div>
-        </a>
+            <div class="flex-1 min-w-0 py-0.5">
+              <div class="flex items-center gap-2 mb-1.5">
+                ${post.category ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full" style="background:rgba(13,148,136,0.1);color:var(--color-accent);">${esc(post.category)}</span>` : ''}
+                <span class="text-xs text-[var(--color-text-secondary)]">${esc(date)}</span>
+                <span class="text-xs text-[var(--color-text-secondary)] hidden sm:inline">· ${estimateReadTime(post.content)} 읽기</span>
+              </div>
+              <h2 class="post-card-title text-base font-semibold leading-snug mb-1.5 line-clamp-2 transition-colors" style="color:var(--color-text);">${esc(post.title)}</h2>
+              <p class="text-sm text-[var(--color-text-secondary)] line-clamp-2 leading-relaxed">${esc(post.description)}</p>
+            </div>
+          </a>
+          ${adminBtns}
+        </div>
       `;
     }).join('');
+  }
+
+  async function adminDeletePost(slug) {
+    if (!confirm(`"${slug}" 글을 삭제할까요?`)) return;
+    const token = localStorage.getItem('auth_token');
+    try {
+      const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        allPosts = allPosts.filter(p => p.slug !== slug);
+        filterAndSearch();
+      } else {
+        const d = await res.json();
+        alert('삭제 실패: ' + (d.error || res.status));
+      }
+    } catch (e) {
+      alert('오류: ' + e.message);
+    }
   }
 
   function filterAndSearch() {

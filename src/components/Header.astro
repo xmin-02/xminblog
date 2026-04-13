@@ -45,6 +45,13 @@ const pathname = Astro.url.pathname;
         Portfolio
       </a>
 
+      <!-- Admin: write button (shown only for admin) -->
+      <a id="admin-write-btn" href="/admin"
+        style="display:none;background:rgba(13,148,136,0.1);color:var(--color-accent);"
+        class="items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors">
+        + 글 쓰기
+      </a>
+
       <!-- Search button -->
       <button
         id="search-toggle"
@@ -132,6 +139,7 @@ const pathname = Astro.url.pathname;
     const loginBtn = document.getElementById('auth-login-btn');
     const userMenu = document.getElementById('auth-user-menu');
 
+    const writeBtn = document.getElementById('admin-write-btn');
     if (token && userRaw) {
       try {
         const user = JSON.parse(userRaw);
@@ -142,15 +150,30 @@ const pathname = Astro.url.pathname;
         document.getElementById('auth-nickname').textContent = user.nickname || user.email.split('@')[0];
         document.getElementById('dd-nickname').textContent = user.nickname || user.email.split('@')[0];
         document.getElementById('dd-email').textContent = user.email;
+        if (user.role === 'admin') {
+          writeBtn.style.display = 'inline-flex';
+          // Add admin panel link to dropdown
+          const dropdown = document.getElementById('auth-dropdown');
+          if (dropdown && !dropdown.querySelector('#dd-admin-link')) {
+            const adminLink = document.createElement('a');
+            adminLink.id = 'dd-admin-link';
+            adminLink.href = '/admin';
+            adminLink.className = 'block px-3 py-2 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bg-secondary)] transition-colors';
+            adminLink.textContent = '관리 패널';
+            dropdown.insertBefore(adminLink, dropdown.querySelector('button'));
+          }
+        }
       } catch {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('auth_user');
         loginBtn.style.display = 'inline-flex';
         userMenu.style.display = 'none';
+        writeBtn.style.display = 'none';
       }
     } else {
       loginBtn.style.display = 'inline-flex';
       userMenu.style.display = 'none';
+      writeBtn.style.display = 'none';
     }
   }
 

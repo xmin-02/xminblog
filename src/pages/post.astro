@@ -383,6 +383,26 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             ${tags ? `<div class="flex flex-wrap gap-2 mt-4">${tags}</div>` : ''}
           </header>
 
+          ${(() => {
+            try {
+              const u = JSON.parse(localStorage.getItem('auth_user') || '{}');
+              return u.role === 'admin' ? `
+                <div class="flex items-center gap-2 mb-6">
+                  <a href="/admin?edit=${esc(slug)}"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    style="background:rgba(13,148,136,0.1);color:var(--color-accent);">
+                    <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    편집
+                  </a>
+                  <button onclick="adminDeleteCurrentPost()"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    style="background:rgba(239,68,68,0.08);color:#ef4444;">
+                    <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    삭제
+                  </button>
+                </div>` : '';
+            } catch { return ''; }
+          })()}
           <div class="prose prose-lg max-w-none" id="prose-content">${renderMarkdown(post.content || '')}</div>
 
           <!-- Like button -->
@@ -444,6 +464,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           <p class="text-base font-medium mb-2">글을 찾을 수 없습니다.</p>
           <a href="/" class="text-sm text-[var(--color-accent)] hover:underline">홈으로 돌아가기</a>
         </div>`;
+    }
+  }
+
+  async function adminDeleteCurrentPost() {
+    if (!_currentSlug) return;
+    if (!confirm(`"${_currentSlug}" 글을 삭제할까요?`)) return;
+    const token = localStorage.getItem('auth_token');
+    try {
+      const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(_currentSlug)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        window.location.href = '/';
+      } else {
+        const d = await res.json();
+        alert('삭제 실패: ' + (d.error || res.status));
+      }
+    } catch (e) {
+      alert('오류: ' + e.message);
     }
   }
 

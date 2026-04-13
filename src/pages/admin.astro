@@ -176,6 +176,18 @@ async function sha256(text) {
 const authScreen = document.getElementById('auth-screen');
 const adminPanel = document.getElementById('admin-panel');
 
+// Auto-login via JWT if admin is already logged in
+(function() {
+  try {
+    const token = localStorage.getItem('auth_token');
+    const user = JSON.parse(localStorage.getItem('auth_user') || '{}');
+    if (token && user.role === 'admin') {
+      sessionStorage.setItem('admin_auth', 'true');
+      sessionStorage.setItem('admin_jwt', token);
+    }
+  } catch {}
+})();
+
 function isAuthenticated() {
   return sessionStorage.getItem('admin_auth') === 'true';
 }
@@ -184,6 +196,9 @@ if (isAuthenticated()) {
   authScreen.classList.add('hidden');
   adminPanel.classList.remove('hidden');
   loadPosts();
+  // Handle ?edit=slug URL param
+  const editSlug = new URLSearchParams(window.location.search).get('edit');
+  if (editSlug) fetchAndEdit(editSlug);
 }
 
 document.getElementById('auth-form').addEventListener('submit', async (e) => {
@@ -202,6 +217,8 @@ document.getElementById('auth-form').addEventListener('submit', async (e) => {
 
 document.getElementById('logout-btn').addEventListener('click', () => {
   sessionStorage.removeItem('admin_auth');
+  sessionStorage.removeItem('admin_jwt');
+  sessionStorage.removeItem('admin_pw');
   location.reload();
 });
 
@@ -352,7 +369,7 @@ async function deletePost(slug) {
   try {
     const res = await fetch(`${API_BASE}/api/posts/${slug}`, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ password: getPasswordForApi() }),
     });
     const data = await res.json();
@@ -394,13 +411,13 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     if (editingSlug) {
       res = await fetch(`${API_BASE}/api/posts/${editingSlug}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload),
       });
     } else {
       res = await fetch(`${API_BASE}/api/posts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload),
       });
     }
@@ -444,6 +461,12 @@ if (isAuthenticated() && !sessionStorage.getItem('admin_pw')) {
 
 function getPasswordForApi() {
   return sessionStorage.getItem('admin_pw') ?? '';
+}
+
+function getAuthHeaders() {
+  const jwt = sessionStorage.getItem('admin_jwt') || localStorage.getItem('auth_token');
+  const base = { 'Content-Type': 'application/json' };
+  return jwt ? { ...base, Authorization: `Bearer ${jwt}` } : base;
 }
 </script>
 </BaseLayout>
