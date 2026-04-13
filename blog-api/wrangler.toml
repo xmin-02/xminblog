@@ -6,9 +6,9 @@ compatibility_flags = ["nodejs_compat"]
 # Secrets (set via `wrangler secret put`):
 #   GITHUB_TOKEN   — GitHub Personal Access Token with repo write access
 #   ADMIN_PASSWORD — Plain-text admin password (worker hashes and compares)
-#
-# Optional vars (override defaults):
-# [vars]
-# GITHUB_OWNER = "xmin-02"
-# GITHUB_REPO  = "xminblog"
-# GITHUB_BRANCH = "main"
+#   JWT_SECRET     — Random secret for signing JWTs (e.g. openssl rand -hex 32)
+
+[[d1_databases]]
+binding = "DB"
+database_name = "blog-db"
+database_id = "010aa8d9-5bd9-488a-870c-6d9dd1e4c488"

@@ -1,0 +1,185 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="로그인 — xmin.blog" description="xmin.blog 로그인 및 회원가입">
+  <div class="mx-auto max-w-md px-4 py-16">
+    <div class="card">
+      <!-- Logo -->
+      <div class="flex items-center justify-center gap-2 mb-8" style="font-family:var(--font-display);">
+        <span class="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold" style="background:linear-gradient(135deg,#0d9488,#0f766e);">x</span>
+        <span class="text-lg font-bold">xmin<span class="text-[var(--color-accent)]">.</span>blog</span>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b border-[var(--color-border)] mb-6">
+        <button id="tab-login" class="tab-btn active flex-1 pb-3 text-sm font-semibold transition-colors" onclick="switchTab('login')">로그인</button>
+        <button id="tab-signup" class="tab-btn flex-1 pb-3 text-sm font-semibold transition-colors" onclick="switchTab('signup')">회원가입</button>
+      </div>
+
+      <!-- Error / success message -->
+      <div id="msg" class="hidden text-xs px-3 py-2 rounded-lg mb-4"></div>
+
+      <!-- Login form -->
+      <form id="form-login" class="space-y-4" onsubmit="submitLogin(event)">
+        <div>
+          <label class="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">이메일</label>
+          <input name="email" type="email" required autocomplete="email"
+            class="w-full px-3 py-2.5 rounded-lg text-sm border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all"
+            placeholder="you@example.com" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">비밀번호</label>
+          <input name="password" type="password" required autocomplete="current-password"
+            class="w-full px-3 py-2.5 rounded-lg text-sm border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all"
+            placeholder="••••••••" />
+        </div>
+        <button type="submit" id="btn-login"
+          class="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-all"
+          style="background:linear-gradient(135deg,#0d9488,#0f766e);">
+          로그인
+        </button>
+      </form>
+
+      <!-- Signup form -->
+      <form id="form-signup" class="space-y-4 hidden" onsubmit="submitSignup(event)">
+        <div>
+          <label class="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">이메일</label>
+          <input name="email" type="email" required autocomplete="email"
+            class="w-full px-3 py-2.5 rounded-lg text-sm border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all"
+            placeholder="you@example.com" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">닉네임 <span class="text-[var(--color-text-secondary)] font-normal">(선택)</span></label>
+          <input name="nickname" type="text" autocomplete="nickname"
+            class="w-full px-3 py-2.5 rounded-lg text-sm border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all"
+            placeholder="표시될 이름" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">비밀번호</label>
+          <input name="password" type="password" required autocomplete="new-password" minlength="8"
+            class="w-full px-3 py-2.5 rounded-lg text-sm border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all"
+            placeholder="8자 이상" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">비밀번호 확인</label>
+          <input name="password2" type="password" required autocomplete="new-password"
+            class="w-full px-3 py-2.5 rounded-lg text-sm border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all"
+            placeholder="••••••••" />
+        </div>
+        <button type="submit" id="btn-signup"
+          class="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-all"
+          style="background:linear-gradient(135deg,#0d9488,#0f766e);">
+          가입하기
+        </button>
+      </form>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .tab-btn {
+    color: var(--color-text-secondary);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab-btn.active {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+  }
+</style>
+
+<script is:inline>
+  const API_BASE = 'https://blog-api.aidi1030.workers.dev';
+
+  // Redirect if already logged in
+  if (localStorage.getItem('auth_token')) {
+    window.location.href = '/';
+  }
+
+  // Check if signup tab requested
+  if (window.location.hash === '#signup') switchTab('signup');
+
+  function switchTab(tab) {
+    document.getElementById('form-login').classList.toggle('hidden', tab !== 'login');
+    document.getElementById('form-signup').classList.toggle('hidden', tab !== 'signup');
+    document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+    document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
+    hideMsg();
+  }
+
+  function showMsg(text, isError) {
+    const el = document.getElementById('msg');
+    el.textContent = text;
+    el.className = `text-xs px-3 py-2 rounded-lg mb-4 ${isError ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'}`;
+    el.classList.remove('hidden');
+  }
+
+  function hideMsg() {
+    document.getElementById('msg').classList.add('hidden');
+  }
+
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = loading;
+    btn.style.opacity = loading ? '0.7' : '1';
+    btn.textContent = loading ? '처리 중...' : (btnId === 'btn-login' ? '로그인' : '가입하기');
+  }
+
+  async function submitLogin(e) {
+    e.preventDefault();
+    hideMsg();
+    const form = e.target;
+    const email = form.email.value.trim();
+    const password = form.password.value;
+    setLoading('btn-login', true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showMsg(data.error || '로그인 실패', true); return; }
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('auth_user', JSON.stringify(data.user));
+      window.location.href = document.referrer && !document.referrer.includes('/login') ? document.referrer : '/';
+    } catch {
+      showMsg('네트워크 오류가 발생했습니다', true);
+    } finally {
+      setLoading('btn-login', false);
+    }
+  }
+
+  async function submitSignup(e) {
+    e.preventDefault();
+    hideMsg();
+    const form = e.target;
+    const email = form.email.value.trim();
+    const nickname = form.nickname.value.trim();
+    const password = form.password.value;
+    const password2 = form.password2.value;
+
+    if (password !== password2) { showMsg('비밀번호가 일치하지 않습니다', true); return; }
+    if (password.length < 8) { showMsg('비밀번호는 8자 이상이어야 합니다', true); return; }
+
+    setLoading('btn-signup', true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, nickname }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showMsg(data.error || '가입 실패', true); return; }
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('auth_user', JSON.stringify(data.user));
+      showMsg('가입 완료! 이동 중...', false);
+      setTimeout(() => { window.location.href = '/'; }, 800);
+    } catch {
+      showMsg('네트워크 오류가 발생했습니다', true);
+    } finally {
+      setLoading('btn-signup', false);
+    }
+  }
+</script>
