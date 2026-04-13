@@ -86,51 +86,55 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   .toc-h2 { font-size: 0.75rem; font-weight: 500; }
 
   /* ── Inline editor ── */
-  .edit-split {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    min-height: 520px;
-  }
-  @media (max-width: 768px) { .edit-split { grid-template-columns: 1fr; } }
-  .edit-md-textarea {
-    width: 100%; height: 100%; min-height: 500px;
-    padding: 1rem; border-radius: 0.625rem;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-secondary);
-    color: var(--color-text);
-    font-family: var(--font-mono); font-size: 0.875rem;
-    line-height: 1.7; resize: none; outline: none;
-    transition: border-color 0.15s;
-  }
-  .edit-md-textarea:focus { border-color: var(--color-accent); }
-  .edit-preview-pane {
-    overflow-y: auto; padding: 1rem 1.25rem;
-    border: 1px solid var(--color-border);
-    border-radius: 0.625rem;
-    background: var(--color-bg-secondary);
-  }
-  .edit-field {
-    width: 100%; padding: 0.625rem 0.75rem;
-    border-radius: 0.5rem; border: 1px solid var(--color-border);
-    background: var(--color-bg-secondary); color: var(--color-text);
-    font-size: 0.875rem; outline: none; transition: border-color 0.15s;
-    font-family: var(--font-sans);
-  }
-  .edit-field:focus { border-color: var(--color-accent); }
   .edit-save-btn {
-    padding: 0.5rem 1.5rem; border-radius: 0.5rem; border: none;
+    padding: 0.375rem 1.25rem; border-radius: 0.5rem; border: none;
     background: var(--color-accent); color: white;
-    font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
+    font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
   }
   .edit-save-btn:hover { opacity: 0.88; }
   .edit-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .edit-cancel-btn {
-    padding: 0.5rem 1.25rem; border-radius: 0.5rem;
+    padding: 0.375rem 1rem; border-radius: 0.5rem;
     border: 1px solid var(--color-border); background: transparent;
-    color: var(--color-text-secondary); font-size: 0.875rem; cursor: pointer; transition: all 0.15s;
+    color: var(--color-text-secondary); font-size: 0.8125rem; cursor: pointer; transition: all 0.15s;
   }
   .edit-cancel-btn:hover { border-color: var(--color-text); color: var(--color-text); }
+  [contenteditable="true"] {
+    border-radius: 0.375rem;
+    transition: outline 0.15s;
+    outline: 2px solid transparent;
+    outline-offset: 3px;
+  }
+  [contenteditable="true"]:focus { outline-color: var(--color-accent); }
+  .md-toolbar {
+    display: flex; flex-wrap: wrap; gap: 0.125rem;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--color-border); border-bottom: none;
+    border-radius: 0.625rem 0.625rem 0 0;
+    background: var(--color-bg-secondary);
+  }
+  .md-toolbar-btn {
+    padding: 0.2rem 0.45rem; border-radius: 0.3rem; border: none;
+    background: transparent; color: var(--color-text-secondary);
+    font-size: 0.78rem; cursor: pointer; transition: all 0.12s;
+    line-height: 1.4; min-width: 1.6rem; text-align: center;
+  }
+  .md-toolbar-btn:hover { background: var(--color-accent); color: #fff; }
+  .md-toolbar-sep { width: 1px; background: var(--color-border); margin: 0.15rem 0.2rem; align-self: stretch; }
+  .edit-body-textarea {
+    width: 100%; padding: 1rem 1.125rem;
+    border: 1px solid var(--color-border); border-radius: 0 0 0.625rem 0.625rem;
+    background: var(--color-bg-secondary); color: var(--color-text);
+    font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.8;
+    resize: none; outline: none; overflow: hidden; min-height: 160px;
+    transition: border-color 0.15s;
+  }
+  .edit-body-textarea:focus { border-color: var(--color-accent); }
+  .edit-divider {
+    display: flex; align-items: center; gap: 0.75rem; margin: 1.75rem 0 1.25rem;
+    color: var(--color-text-secondary); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .edit-divider::before, .edit-divider::after { content: ''; flex: 1; height: 1px; background: var(--color-border); }
 
   .like-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 2rem; font-size: 0.8125rem; font-weight: 600; border: 1.5px solid var(--color-border); background: var(--color-bg-card); color: var(--color-text-secondary); cursor: pointer; transition: all 0.15s; }
   .like-btn:hover { border-color: #f43f5e; color: #f43f5e; }
@@ -518,49 +522,140 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   // ── Inline editor ─────────────────────────────────────────────────────────
 
+  // ── Toolbar definitions ───────────────────────────────────────────────────
+  const TOOLBAR = [
+    { label: '<b>B</b>',   title: '굵게',     wrap: ['**','**'] },
+    { label: '<i>I</i>',   title: '기울임',   wrap: ['*','*'] },
+    { label: '~~',         title: '취소선',   wrap: ['~~','~~'] },
+    null, // separator
+    { label: 'H1',  title: '제목 1', prefix: '# ' },
+    { label: 'H2',  title: '제목 2', prefix: '## ' },
+    { label: 'H3',  title: '제목 3', prefix: '### ' },
+    null,
+    { label: '<code style="font-size:10px">코드</code>', title: '인라인 코드', wrap: ['`','`'] },
+    { label: '<code style="font-size:10px">```</code>',  title: '코드 블록', block: '```\n\n```', cursor: 4 },
+    null,
+    { label: '•',  title: '글머리 기호', prefix: '- ' },
+    { label: '1.',  title: '번호 목록',   prefix: '1. ' },
+    { label: '❝',  title: '인용',         prefix: '> ' },
+    { label: '—',  title: '구분선',       block: '\n---\n' },
+    null,
+    { label: '🔗', title: '링크',  block: '[텍스트](URL)', sel: [1,3] },
+    { label: '🖼️', title: '이미지', block: '![설명](URL)', sel: [2,4] },
+    { label: '⊞',  title: '표',    block: '| 열1 | 열2 | 열3 |\n|---|---|---|\n| 내용 | 내용 | 내용 |' },
+  ];
+
+  function renderToolbar() {
+    return TOOLBAR.map((btn, i) => {
+      if (!btn) return '<div class="md-toolbar-sep"></div>';
+      return `<button class="md-toolbar-btn" title="${btn.title}" onclick="insertMd(${i})">${btn.label}</button>`;
+    }).join('');
+  }
+
+  function insertMd(idx) {
+    const btn = TOOLBAR[idx];
+    if (!btn) return;
+    const ta = document.getElementById('edit-content');
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const sel = ta.value.substring(start, end);
+    let insert = '';
+    let cursorOffset = null;
+
+    if (btn.wrap) {
+      insert = btn.wrap[0] + (sel || btn.title) + btn.wrap[1];
+      cursorOffset = start + insert.length;
+    } else if (btn.prefix) {
+      // Insert prefix at start of line
+      const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+      ta.value = ta.value.substring(0, lineStart) + btn.prefix + ta.value.substring(lineStart);
+      ta.setSelectionRange(lineStart + btn.prefix.length, lineStart + btn.prefix.length);
+      ta.focus(); schedulePreview(); autoResize(ta); return;
+    } else if (btn.block) {
+      insert = btn.block;
+      cursorOffset = start + insert.length;
+    }
+
+    if (insert) {
+      ta.value = ta.value.substring(0, start) + insert + ta.value.substring(end);
+      ta.setSelectionRange(cursorOffset ?? start + insert.length, cursorOffset ?? start + insert.length);
+    }
+    ta.focus(); schedulePreview(); autoResize(ta);
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight + 2) + 'px';
+  }
+
   function enterEditMode() {
     const post = _currentPost;
     if (!post) return;
-    const container = document.getElementById('post-container');
     const commentsSection = document.getElementById('comments-section');
     if (commentsSection) commentsSection.style.display = 'none';
 
+    const container = document.getElementById('post-container');
     const tagsStr = (post.tags || []).join(', ');
     const dateVal = post.date ? post.date.slice(0, 10) : new Date().toISOString().slice(0, 10);
 
     container.innerHTML = `
-      <div class="py-2">
-        <div class="flex items-center justify-between mb-5">
-          <h2 class="text-lg font-bold" style="font-family:var(--font-display);color:var(--color-text);">글 편집</h2>
+      <article>
+        <!-- Sticky edit bar -->
+        <div class="flex items-center justify-between mb-8 pb-4 border-b border-[var(--color-border)]" style="position:sticky;top:3.75rem;z-index:30;background:var(--color-bg);padding-top:0.75rem;">
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">편집 중</span>
+            <label class="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] cursor-pointer select-none">
+              <input id="edit-draft" type="checkbox" class="accent-[var(--color-accent)]" ${post.draft ? 'checked' : ''}> 임시저장
+            </label>
+          </div>
           <div class="flex items-center gap-2">
+            <span id="edit-status" class="text-xs"></span>
             <button class="edit-cancel-btn" onclick="cancelEdit()">취소</button>
             <button class="edit-save-btn" id="edit-save-btn" onclick="saveEdit()">저장</button>
-            <span id="edit-status" class="text-xs text-[var(--color-text-secondary)] ml-1"></span>
           </div>
         </div>
 
-        <div class="flex flex-col gap-2.5 mb-5">
-          <input id="edit-title" class="edit-field text-base font-semibold" type="text" placeholder="제목" value="${esc(post.title || '')}" />
-          <textarea id="edit-desc" class="edit-field" rows="2" placeholder="설명 (한 줄 요약)">${esc(post.description || '')}</textarea>
-          <div class="grid grid-cols-2 gap-2.5">
-            <input id="edit-date" class="edit-field" type="date" value="${dateVal}" />
-            <input id="edit-category" class="edit-field" type="text" placeholder="카테고리" value="${esc(post.category || '')}" />
-          </div>
-          <input id="edit-tags" class="edit-field" type="text" placeholder="태그 (쉼표로 구분)" value="${esc(tagsStr)}" />
-          <label class="flex items-center gap-2 text-sm text-[var(--color-text-secondary)] cursor-pointer select-none">
-            <input id="edit-draft" type="checkbox" class="accent-[var(--color-accent)]" ${post.draft ? 'checked' : ''} /> 임시저장
-          </label>
+        <!-- Editable meta row -->
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          <input id="edit-category" type="text" value="${esc(post.category || '')}" placeholder="카테고리"
+            class="text-xs font-semibold px-3 py-1 rounded-full outline-none transition-all"
+            style="background:rgba(13,148,136,0.1);color:var(--color-accent);border:1.5px dashed rgba(13,148,136,0.4);min-width:60px;max-width:120px;" />
+          <input id="edit-date" type="date" value="${dateVal}"
+            class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)]" />
         </div>
 
-        <div class="text-xs text-[var(--color-text-secondary)] mb-2 flex gap-4">
-          <span>← Markdown</span><span>미리보기 →</span>
-        </div>
-        <div class="edit-split">
-          <textarea id="edit-content" class="edit-md-textarea" spellcheck="false" oninput="schedulePreview()">${esc(post.content || '')}</textarea>
-          <div id="edit-preview" class="edit-preview-pane prose prose-lg max-w-none">${renderMarkdown(post.content || '')}</div>
-        </div>
-      </div>
+        <!-- Editable title -->
+        <h1 id="edit-title" contenteditable="true" spellcheck="false"
+          class="text-2xl sm:text-3xl font-bold leading-snug mb-4 tracking-tight"
+          style="font-family:var(--font-display);color:var(--color-text);"
+        >${esc(post.title || '')}</h1>
+
+        <!-- Editable description -->
+        <p id="edit-desc" contenteditable="true" spellcheck="false"
+          class="text-base leading-relaxed mb-4"
+          style="color:var(--color-text-secondary);"
+        >${esc(post.description || '')}</p>
+
+        <!-- Editable tags -->
+        <input id="edit-tags" type="text" value="${esc(tagsStr)}" placeholder="태그 (쉼표로 구분)"
+          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-8"
+          style="max-width:320px;" />
+
+        <!-- Markdown toolbar + editor -->
+        <div class="md-toolbar">${renderToolbar()}</div>
+        <textarea id="edit-content" class="edit-body-textarea" spellcheck="false"
+          oninput="schedulePreview();autoResize(this)">${esc(post.content || '')}</textarea>
+
+        <!-- Preview divider -->
+        <div class="edit-divider">미리보기</div>
+
+        <!-- Live preview -->
+        <div id="edit-preview" class="prose prose-lg max-w-none">${renderMarkdown(post.content || '')}</div>
+      </article>
     `;
+
+    const ta = document.getElementById('edit-content');
+    if (ta) { requestAnimationFrame(() => autoResize(ta)); }
   }
 
   let _previewTimer = null;
@@ -570,7 +665,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const content = document.getElementById('edit-content')?.value || '';
       const preview = document.getElementById('edit-preview');
       if (preview) preview.innerHTML = renderMarkdown(content);
-    }, 150);
+    }, 200);
   }
 
   function cancelEdit() {
@@ -582,8 +677,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   async function saveEdit() {
     const btn = document.getElementById('edit-save-btn');
     const status = document.getElementById('edit-status');
-    const title = document.getElementById('edit-title')?.value.trim();
-    const description = document.getElementById('edit-desc')?.value.trim();
+    const title = document.getElementById('edit-title')?.innerText.trim();
+    const description = document.getElementById('edit-desc')?.innerText.trim();
     const date = document.getElementById('edit-date')?.value;
     const category = document.getElementById('edit-category')?.value.trim();
     const tags = (document.getElementById('edit-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
@@ -596,8 +691,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       return;
     }
 
-    btn.disabled = true;
-    btn.textContent = '저장 중...';
+    btn.disabled = true; btn.textContent = '저장 중...';
     status.textContent = '';
     const token = localStorage.getItem('auth_token');
 
@@ -609,18 +703,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      status.textContent = '저장됨!';
-      status.style.color = '#10b981';
+      status.textContent = '저장됨!'; status.style.color = '#10b981';
       setTimeout(() => {
-        const commentsSection = document.getElementById('comments-section');
-        if (commentsSection) commentsSection.style.display = '';
+        const cs = document.getElementById('comments-section');
+        if (cs) cs.style.display = '';
         loadPost();
-      }, 800);
+      }, 700);
     } catch (err) {
-      status.textContent = '오류: ' + err.message;
-      status.style.color = '#ef4444';
-      btn.disabled = false;
-      btn.textContent = '저장';
+      status.textContent = '오류: ' + err.message; status.style.color = '#ef4444';
+      btn.disabled = false; btn.textContent = '저장';
     }
   }
 
