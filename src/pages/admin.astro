@@ -453,8 +453,8 @@ document.getElementById('auth-form').addEventListener('submit', async function c
   }
 });
 
-if (isAuthenticated() && !sessionStorage.getItem('admin_pw')) {
-  // If already authenticated (page reload) but pw not in session, prompt once
+// If authenticated via password but pw lost on reload — only prompt if no JWT available
+if (isAuthenticated() && !sessionStorage.getItem('admin_pw') && !sessionStorage.getItem('admin_jwt') && !localStorage.getItem('auth_token')) {
   const pw = prompt('Re-enter admin password for API access:');
   if (pw) sessionStorage.setItem('admin_pw', pw);
 }
