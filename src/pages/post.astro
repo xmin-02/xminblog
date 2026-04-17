@@ -382,9 +382,26 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   // ── Main load ─────────────────────────────────────────────────────────────
 
+  let _isNewPost = false;
+
   async function loadPost() {
     const slug = decodeURIComponent(window.location.hash.slice(1));
     if (!slug) { window.location.href = '/'; return; }
+
+    if (slug === 'new') {
+      _isNewPost = true;
+      _currentSlug = '';
+      _currentPost = { title: '', description: '', content: '', category: '', tags: [], date: new Date().toISOString().slice(0, 10), draft: false };
+      document.title = '새 글 작성 — xmin.blog';
+      const container = document.getElementById('post-container');
+      container.innerHTML = '<article></article>';
+      const commentsSection = document.getElementById('comments-section');
+      if (commentsSection) commentsSection.style.display = 'none';
+      enterEditMode();
+      return;
+    }
+
+    _isNewPost = false;
     _currentSlug = slug;
 
     const container = document.getElementById('post-container');
@@ -669,6 +686,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   function cancelEdit() {
+    if (_isNewPost) {
+      window.location.href = '/';
+      return;
+    }
     const commentsSection = document.getElementById('comments-section');
     if (commentsSection) commentsSection.style.display = '';
     loadPost();
@@ -696,19 +717,39 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const token = localStorage.getItem('auth_token');
 
     try {
-      const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(_currentSlug)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title, description, date, category, tags, draft, content }),
-      });
+      let res;
+      if (_isNewPost) {
+        res = await fetch(`${API_BASE}/api/posts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ title, description, date, category, tags, draft, content }),
+        });
+      } else {
+        res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(_currentSlug)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ title, description, date, category, tags, draft, content }),
+        });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       status.textContent = '저장됨!'; status.style.color = '#10b981';
-      setTimeout(() => {
-        const cs = document.getElementById('comments-section');
-        if (cs) cs.style.display = '';
-        loadPost();
-      }, 700);
+      if (_isNewPost && data.slug) {
+        _isNewPost = false;
+        _currentSlug = data.slug;
+        setTimeout(() => {
+          window.location.hash = data.slug;
+          const cs = document.getElementById('comments-section');
+          if (cs) cs.style.display = '';
+          loadPost();
+        }, 700);
+      } else {
+        setTimeout(() => {
+          const cs = document.getElementById('comments-section');
+          if (cs) cs.style.display = '';
+          loadPost();
+        }, 700);
+      }
     } catch (err) {
       status.textContent = '오류: ' + err.message; status.style.color = '#ef4444';
       btn.disabled = false; btn.textContent = '저장';
