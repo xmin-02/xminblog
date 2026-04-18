@@ -33,8 +33,7 @@ const { title, description = 'xmin의 개인 블로그 — 보안, AI, 개발' }
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <title>{title}</title>
     <script is:inline>
-      const theme = localStorage.getItem('theme') ??
-        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const theme = localStorage.getItem('theme') ?? 'dark';
       if (theme === 'dark') document.documentElement.classList.add('dark');
     </script>
   </head>
@@ -76,16 +75,17 @@ const { title, description = 'xmin의 개인 블로그 — 보안, AI, 개발' }
 
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          var opacity = isDark() ? 0.13 : 0.08;
-          var radius = Math.min(canvas.width, canvas.height) * 0.2;
+          var opacity = isDark() ? 0.18 : 0.08;
+          var radius = Math.min(canvas.width, canvas.height) * 0.22;
+          var rgb = isDark() ? '34,211,238' : '8,145,178';
 
           var grad = ctx.createRadialGradient(
             current.x, current.y, 0,
             current.x, current.y, radius
           );
-          grad.addColorStop(0, 'rgba(13,148,136,' + opacity + ')');
-          grad.addColorStop(0.45, 'rgba(13,148,136,' + (opacity * 0.35) + ')');
-          grad.addColorStop(1, 'rgba(13,148,136,0)');
+          grad.addColorStop(0, 'rgba(' + rgb + ',' + opacity + ')');
+          grad.addColorStop(0.45, 'rgba(' + rgb + ',' + (opacity * 0.35) + ')');
+          grad.addColorStop(1, 'rgba(' + rgb + ',0)');
 
           ctx.fillStyle = grad;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
