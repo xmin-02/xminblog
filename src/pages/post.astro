@@ -453,9 +453,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           ${next ? `<a href="/post#${esc(next.slug)}" class="post-nav-link" style="text-align:right;"><span class="post-nav-label">다음 글 →</span><span class="post-nav-title">${esc(next.title)}</span></a>` : '<div class="flex-1"></div>'}
         </div>` : '';
 
-      const wordCount = (post.content || '').replace(/<[^>]+>/g, '').split(/\s+/).length;
-      const readTime = Math.max(1, Math.round(wordCount / 200));
-
       container.innerHTML = `
         <article>
           ${post.cover ? `<div class="post-cover"><img src="${esc(post.cover)}" alt="${esc(post.title)}" loading="eager" /></div>` : ''}
@@ -463,7 +460,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             <div class="flex flex-wrap items-center gap-2 mb-4" style="font-family: var(--font-mono);">
               ${post.category ? `<a href="/?category=${esc(post.category)}" class="text-xs font-medium transition-colors" style="color:var(--color-accent);">[${esc(post.category)}]</a>` : ''}
               <span class="text-xs text-[var(--color-text-secondary)]">${esc(date)}</span>
-              <span class="text-xs text-[var(--color-text-secondary)]">· ${readTime}분 읽기</span>
             </div>
             <h1 class="text-2xl sm:text-3xl font-bold leading-snug mb-4 tracking-tight" style="font-family:var(--font-display);color:var(--color-text);">${esc(post.title)}</h1>
             <p class="text-base text-[var(--color-text-secondary)] leading-relaxed">${esc(post.description)}</p>

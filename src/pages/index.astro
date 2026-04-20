@@ -225,13 +225,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  function estimateReadTime(content) {
-    if (!content) return '1분';
-    const words = content.replace(/<[^>]+>/g, '').split(/\s+/).length;
-    const mins = Math.max(1, Math.round(words / 200));
-    return `${mins}분`;
-  }
-
   function isAdminUser() {
     try { return JSON.parse(localStorage.getItem('auth_user') || '{}').role === 'admin'; } catch { return false; }
   }
@@ -266,7 +259,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             <div class="post-meta">
               ${post.category ? `<span class="post-cat">[${esc(post.category)}]</span>` : ''}
               <span>${esc(date)}</span>
-              <span class="post-meta-mute hidden sm:inline">· ${estimateReadTime(post.content)} 읽기</span>
             </div>
             <h2 class="post-card-title">${esc(post.title)}</h2>
             <p class="post-desc">${esc(post.description)}</p>
