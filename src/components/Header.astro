@@ -14,43 +14,37 @@ const pathname = Astro.url.pathname;
     </a>
 
     <!-- Right controls -->
-    <div class="flex items-center gap-1">
-      <a
-        href="/"
-        class:list={[
-          'hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-          pathname === '/'
-            ? 'text-[var(--color-accent)] bg-[rgba(13,148,136,0.08)]'
-            : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-secondary)]'
-        ]}
-      >
-        블로그
-      </a>
-      <a
-        href="/about"
-        class:list={[
-          'hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-          pathname === '/about'
-            ? 'text-[var(--color-accent)] bg-[rgba(13,148,136,0.08)]'
-            : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-secondary)]'
-        ]}
-      >
-        소개
-      </a>
-      <a
-        href="https://xmin.sh"
-        target="_blank"
-        rel="noopener"
-        class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-secondary)] transition-colors"
-      >
-        Portfolio
-      </a>
+    <div class="flex items-center gap-2">
+      <nav class="hidden sm:flex items-center gap-2 text-sm" style="font-family: var(--font-mono);">
+        <a
+          href="/"
+          class:list={[
+            'transition-colors',
+            pathname === '/' ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
+          ]}
+        >블로그</a>
+        <span class="text-[var(--color-border)]">|</span>
+        <a
+          href="/about"
+          class:list={[
+            'transition-colors',
+            pathname === '/about' ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
+          ]}
+        >소개</a>
+        <span class="text-[var(--color-border)]">|</span>
+        <a
+          href="https://xmin.sh"
+          target="_blank"
+          rel="noopener"
+          class="text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
+        >포트폴리오</a>
+      </nav>
 
       <!-- Admin: write button (shown only for admin) -->
       <a id="admin-write-btn" href="/post#new"
-        style="display:none;background:rgba(13,148,136,0.1);color:var(--color-accent);"
-        class="items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors">
-        + 글 쓰기
+        style="display:none;color:var(--color-accent);font-family:var(--font-mono);"
+        class="items-center gap-1 px-2 py-1 rounded text-xs font-medium border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors">
+        + new
       </a>
 
       <!-- Search button -->

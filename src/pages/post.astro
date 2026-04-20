@@ -38,7 +38,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             </div>
             <p class="font-bold text-[var(--color-text)] text-sm">주수민 <span class="font-normal text-[var(--color-text-secondary)]">/ xmin</span></p>
             <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">보안 · AI</p>
-            <a href="/" class="mt-3 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors" style="background:rgba(13,148,136,0.1);color:var(--color-accent);">
+            <a href="/" class="mt-3 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors" style="background:rgba(34,211,238,0.1);color:var(--color-accent);">
               글 목록 보기
             </a>
           </div>
@@ -69,21 +69,37 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   .post-nav-link {
     display: flex; flex-direction: column; gap: 0.25rem;
-    padding: 0.875rem 1rem; border-radius: 0.625rem;
-    background-color: var(--color-bg-card);
-    box-shadow: var(--shadow-card);
-    transition: box-shadow 0.2s, transform 0.15s;
+    padding: 0.875rem 1rem; border-radius: 0.5rem;
+    background-color: transparent;
+    border: 1px solid var(--color-border);
+    transition: border-color 0.2s, transform 0.15s;
     text-decoration: none; color: inherit; flex: 1; min-width: 0;
   }
-  .post-nav-link:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+  .post-nav-link:hover { border-color: var(--color-accent); transform: translateY(-1px); }
   .post-nav-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-secondary); }
   .post-nav-title { font-size: 0.875rem; font-weight: 600; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 0.15s; }
   .post-nav-link:hover .post-nav-title { color: var(--color-accent); }
 
   .toc-link { display: block; padding: 0.2rem 0.5rem; border-radius: 0.35rem; color: var(--color-text-secondary); text-decoration: none; transition: color 0.15s, background-color 0.15s; line-height: 1.4; }
-  .toc-link:hover, .toc-link.active { color: var(--color-accent); background-color: rgba(13,148,136,0.08); }
+  .toc-link:hover, .toc-link.active { color: var(--color-accent); background-color: rgba(34,211,238,0.08); }
   .toc-h3 { padding-left: 1rem; font-size: 0.7rem; }
   .toc-h2 { font-size: 0.75rem; font-weight: 500; }
+
+  /* ── Post cover banner ── */
+  .post-cover {
+    margin-bottom: 1.75rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-secondary);
+  }
+  .post-cover img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 360px;
+    object-fit: cover;
+  }
 
   /* ── Inline editor ── */
   .edit-save-btn {
@@ -391,7 +407,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     if (slug === 'new') {
       _isNewPost = true;
       _currentSlug = '';
-      _currentPost = { title: '', description: '', content: '', category: '', tags: [], date: new Date().toISOString().slice(0, 10), draft: false };
+      _currentPost = { title: '', description: '', content: '', category: '', tags: [], date: new Date().toISOString().slice(0, 10), draft: false, cover: '' };
       document.title = '새 글 작성 — xmin.blog';
       const container = document.getElementById('post-container');
       container.innerHTML = '<article></article>';
@@ -442,9 +458,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
       container.innerHTML = `
         <article>
+          ${post.cover ? `<div class="post-cover"><img src="${esc(post.cover)}" alt="${esc(post.title)}" loading="eager" /></div>` : ''}
           <header class="mb-10 pb-8 border-b border-[var(--color-border)]">
-            <div class="flex flex-wrap items-center gap-2 mb-4">
-              ${post.category ? `<a href="/?category=${esc(post.category)}" class="text-xs font-semibold px-3 py-1 rounded-full transition-colors" style="background:rgba(13,148,136,0.1);color:var(--color-accent);">${esc(post.category)}</a>` : ''}
+            <div class="flex flex-wrap items-center gap-2 mb-4" style="font-family: var(--font-mono);">
+              ${post.category ? `<a href="/?category=${esc(post.category)}" class="text-xs font-medium transition-colors" style="color:var(--color-accent);">[${esc(post.category)}]</a>` : ''}
               <span class="text-xs text-[var(--color-text-secondary)]">${esc(date)}</span>
               <span class="text-xs text-[var(--color-text-secondary)]">· ${readTime}분 읽기</span>
             </div>
@@ -460,7 +477,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
                 <div class="flex items-center gap-2 mb-6">
                   <button onclick="enterEditMode()"
                     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                    style="background:rgba(13,148,136,0.1);color:var(--color-accent);">
+                    style="background:rgba(34,211,238,0.1);color:var(--color-accent);">
                     <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     편집
                   </button>
@@ -636,7 +653,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div class="flex flex-wrap items-center gap-2 mb-4">
           <input id="edit-category" type="text" value="${esc(post.category || '')}" placeholder="카테고리"
             class="text-xs font-semibold px-3 py-1 rounded-full outline-none transition-all"
-            style="background:rgba(13,148,136,0.1);color:var(--color-accent);border:1.5px dashed rgba(13,148,136,0.4);min-width:60px;max-width:120px;" />
+            style="background:rgba(34,211,238,0.1);color:var(--color-accent);border:1.5px dashed rgba(34,211,238,0.4);min-width:60px;max-width:120px;" />
           <input id="edit-date" type="date" value="${dateVal}"
             class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)]" />
         </div>
@@ -655,8 +672,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
         <!-- Editable tags -->
         <input id="edit-tags" type="text" value="${esc(tagsStr)}" placeholder="태그 (쉼표로 구분)"
-          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-8"
+          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-3"
           style="max-width:320px;" />
+
+        <!-- Editable cover image URL -->
+        <input id="edit-cover" type="url" value="${esc(post.cover || '')}" placeholder="대표 이미지 URL (선택)"
+          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-8 block"
+          style="max-width:480px;font-family:var(--font-mono);" />
 
         <!-- Markdown toolbar + editor -->
         <div class="md-toolbar">${renderToolbar()}</div>
@@ -704,6 +726,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const category = document.getElementById('edit-category')?.value.trim();
     const tags = (document.getElementById('edit-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
     const draft = document.getElementById('edit-draft')?.checked ?? false;
+    const cover = document.getElementById('edit-cover')?.value.trim() || '';
     const content = document.getElementById('edit-content')?.value || '';
 
     if (!title || !date || !category || !content) {
@@ -722,13 +745,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         res = await fetch(`${API_BASE}/api/posts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ title, description, date, category, tags, draft, content }),
+          body: JSON.stringify({ title, description, date, category, tags, draft, cover, content }),
         });
       } else {
         res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(_currentSlug)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ title, description, date, category, tags, draft, content }),
+          body: JSON.stringify({ title, description, date, category, tags, draft, cover, content }),
         });
       }
       const data = await res.json();
