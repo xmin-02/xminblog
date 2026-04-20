@@ -237,6 +237,7 @@ async function ghDelete(path: string, body: unknown, token: string): Promise<Res
 interface PostMeta {
   title: string; description: string; date: string;
   category: string; tags: string[]; draft: boolean;
+  cover?: string;
 }
 interface PostPayload extends PostMeta { content: string; password: string; }
 
@@ -244,12 +245,13 @@ function buildMarkdown(meta: PostMeta, body: string): string {
   const tags = meta.tags.length
     ? `\ntags: [${meta.tags.map(t => `"${t}"`).join(', ')}]`
     : '\ntags: []';
+  const cover = meta.cover ? `\ncover: "${meta.cover.replace(/"/g, '\\"')}"` : '';
   return `---
 title: "${meta.title.replace(/"/g, '\\"')}"
 description: "${meta.description.replace(/"/g, '\\"')}"
 date: ${meta.date}
 category: "${meta.category.replace(/"/g, '\\"')}"${tags}
-draft: ${meta.draft}
+draft: ${meta.draft}${cover}
 ---
 
 ${body.trimStart()}
@@ -281,6 +283,7 @@ function parseFrontmatter(raw: string): { meta: Partial<PostMeta>; body: string 
   meta.category = str('category');
   meta.tags = arr('tags');
   meta.draft = bool('draft') ?? false;
+  meta.cover = str('cover');
   return { meta, body };
 }
 
@@ -488,9 +491,9 @@ async function listPosts(env: Env, origin: string | null): Promise<Response> {
         try {
           const file = await ghGet<GHFile>(`repos/${owner}/${repo}/contents/${item.path}?ref=${branch}`, token);
           const { meta } = parseFrontmatter(b64DecodeUnicode(file.content));
-          return { slug, title: meta.title ?? slug, description: meta.description ?? '', date: meta.date ?? '', category: meta.category ?? '', tags: meta.tags ?? [], draft: meta.draft ?? false };
+          return { slug, title: meta.title ?? slug, description: meta.description ?? '', date: meta.date ?? '', category: meta.category ?? '', tags: meta.tags ?? [], draft: meta.draft ?? false, cover: meta.cover ?? '' };
         } catch {
-          return { slug, title: slug, description: '', date: '', category: '', tags: [], draft: false };
+          return { slug, title: slug, description: '', date: '', category: '', tags: [], draft: false, cover: '' };
         }
       }),
     );
