@@ -190,6 +190,137 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   .like-btn:hover { border-color: #f43f5e; color: #f43f5e; }
   .like-btn.liked { border-color: #f43f5e; color: #f43f5e; background: rgba(244,63,94,0.06); }
 
+  /* ── Tiptap rich editor ── */
+  .rich-editor {
+    min-height: 360px;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.625rem;
+    background: var(--color-bg-secondary);
+    color: var(--color-text);
+    font-size: 1.0125rem;
+    line-height: 1.85;
+    transition: border-color 0.15s;
+  }
+  .rich-editor:focus-within { border-color: var(--color-accent); }
+  .tiptap-editor-content { outline: none; min-height: 300px; }
+  .tiptap-editor-content:focus { outline: none; }
+  .tiptap-editor-content p { margin-bottom: 1.1em; }
+  .tiptap-editor-content p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--color-text-secondary);
+    opacity: 0.5;
+    float: left;
+    pointer-events: none;
+    height: 0;
+  }
+  .tiptap-editor-content h1, .tiptap-editor-content h2, .tiptap-editor-content h3, .tiptap-editor-content h4 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    margin-top: 1.4em;
+    margin-bottom: 0.5em;
+    color: var(--color-text);
+  }
+  .tiptap-editor-content h1 { font-size: 1.7rem; }
+  .tiptap-editor-content h2 { font-size: 1.4rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.3rem; }
+  .tiptap-editor-content h3 { font-size: 1.15rem; }
+  .tiptap-editor-content ul, .tiptap-editor-content ol { padding-left: 1.5em; margin-bottom: 1.1em; }
+  .tiptap-editor-content li { margin-bottom: 0.3em; }
+  .tiptap-editor-content blockquote {
+    border-left: 3px solid var(--color-accent);
+    padding: 0.4em 1em;
+    color: var(--color-text-secondary);
+    background: rgba(34,211,238,0.06);
+    border-radius: 0 0.5rem 0.5rem 0;
+    margin-bottom: 1.1em;
+  }
+  .tiptap-editor-content pre {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    overflow-x: auto;
+    margin-bottom: 1.1em;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+  }
+  .tiptap-editor-content code {
+    padding: 0.15em 0.4em;
+    border-radius: 0.3rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    font-size: 0.875em;
+    font-family: var(--font-mono);
+  }
+  .tiptap-editor-content pre code { padding: 0; border: none; background: transparent; }
+  .tiptap-editor-content hr {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 1.5em 0;
+  }
+  .tiptap-editor-content a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+  .tiptap-editor-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border);
+    margin: 0.5em 0;
+  }
+  .tiptap-editor-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1.1em;
+    overflow: hidden;
+    table-layout: fixed;
+  }
+  .tiptap-editor-content th, .tiptap-editor-content td {
+    border: 1px solid var(--color-border);
+    padding: 0.5em 0.75em;
+    text-align: left;
+    vertical-align: top;
+    position: relative;
+  }
+  .tiptap-editor-content th { background: var(--color-bg-card); font-weight: 600; }
+  .tiptap-editor-content .selectedCell::after {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(34,211,238,0.18); pointer-events: none;
+  }
+  .tiptap-editor-content .column-resize-handle {
+    position: absolute; right: -2px; top: 0; bottom: 0; width: 4px;
+    background: var(--color-accent); pointer-events: none;
+  }
+
+  /* Slash command menu */
+  .slash-menu {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 0.3rem;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    min-width: 220px;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .slash-item {
+    display: flex; gap: 0.6rem; align-items: center;
+    width: 100%; text-align: left;
+    padding: 0.45rem 0.65rem; border-radius: 0.35rem;
+    background: transparent; border: none; cursor: pointer;
+    font-size: 0.85rem; color: var(--color-text);
+    transition: background 0.1s, color 0.1s;
+  }
+  .slash-item:hover, .slash-item.is-selected {
+    background: rgba(34,211,238,0.12);
+    color: var(--color-accent);
+  }
+  .slash-title { flex: 1; font-weight: 500; }
+  .slash-sub { font-family: var(--font-mono); font-size: 0.7rem; color: var(--color-text-secondary); }
+  .slash-empty { padding: 0.6rem 0.7rem; font-size: 0.8rem; color: var(--color-text-secondary); }
+
+  /* Tippy reset */
+  .tippy-box { background: transparent; border: none; padding: 0; }
+  .tippy-box[data-theme] .tippy-content { padding: 0; }
+
   .comment-card { padding: 0.875rem 1rem; border-radius: 0.75rem; background: var(--color-bg-card); box-shadow: var(--shadow-card); }
   .comment-textarea { width: 100%; padding: 0.75rem; border-radius: 0.625rem; border: 1px solid var(--color-border); background: var(--color-bg-secondary); color: var(--color-text); font-size: 0.875rem; resize: vertical; min-height: 80px; font-family: var(--font-sans); transition: border-color 0.15s; outline: none; }
   .comment-textarea:focus { border-color: var(--color-accent); }
@@ -882,23 +1013,26 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         </div>
 
         <!-- Body (required) -->
-        <label class="edit-field-label" style="margin-top:0.5rem;">본문<span class="edit-required">*</span> <span style="opacity:0.7;">(Markdown)</span></label>
-        <div class="md-toolbar">${renderToolbar()}</div>
-        <textarea id="edit-content" class="edit-body-textarea" spellcheck="false"
-          placeholder="# 제목&#10;&#10;본문을 Markdown으로 작성하세요.&#10;&#10;- 목록&#10;- 항목&#10;&#10;\`\`\`bash&#10;코드 블록&#10;\`\`\`"
-          oninput="schedulePreview();autoResize(this)">${esc(post.content || '')}</textarea>
-
-        <!-- Preview divider -->
-        <div class="edit-divider">미리보기</div>
-
-        <!-- Live preview -->
-        <div id="edit-preview" class="prose prose-lg max-w-none">${renderMarkdown(post.content || '')}</div>
+        <label class="edit-field-label" style="margin-top:0.5rem;">본문<span class="edit-required">*</span> <span style="opacity:0.7;">(Notion식: '/' → 메뉴 · 이미지 붙여넣기 OK)</span></label>
+        <div id="rich-editor" class="rich-editor"></div>
       </article>
     `;
 
-    const ta = document.getElementById('edit-content');
-    if (ta) { requestAnimationFrame(() => autoResize(ta)); }
+    const mount = document.getElementById('rich-editor');
+    if (mount && window.createBlogEditor) {
+      _editor?.destroy?.();
+      _editor = window.createBlogEditor({
+        element: mount,
+        initialMarkdown: post.content || '',
+        apiBase: API_BASE,
+        getAuthToken: () => localStorage.getItem('auth_token'),
+      });
+    } else if (mount) {
+      mount.innerHTML = '<p class="text-sm" style="color:#ef4444;">에디터 로드 실패 — 새로고침 후 다시 시도</p>';
+    }
   }
+
+  let _editor = null;
 
   function togglePrivateInput() {
     const checked = document.getElementById('edit-private')?.checked ?? false;
@@ -919,6 +1053,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   function cancelEdit() {
+    _editor?.destroy?.(); _editor = null;
     if (_isNewPost) {
       window.location.href = '/';
       return;
@@ -940,7 +1075,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const cover = document.getElementById('edit-cover')?.value.trim() || '';
     const is_private = document.getElementById('edit-private')?.checked ?? false;
     const private_password = document.getElementById('edit-password')?.value || '';
-    const content = document.getElementById('edit-content')?.value || '';
+    const content = (_editor ? _editor.getMarkdown() : '').trim();
 
     if (!title || !date || !category || !content) {
       status.textContent = '제목, 날짜, 카테고리, 내용은 필수입니다.';
@@ -979,6 +1114,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       status.textContent = '저장됨!'; status.style.color = '#10b981';
+      _editor?.destroy?.(); _editor = null;
       if (_isNewPost && data.slug) {
         _isNewPost = false;
         _currentSlug = data.slug;
@@ -1023,4 +1159,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   loadPost();
+</script>
+
+<script>
+  import { createBlogEditor } from '../lib/editor';
+  // expose to inline script (which calls window.createBlogEditor on Edit)
+  (window as any).createBlogEditor = createBlogEditor;
 </script>
