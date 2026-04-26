@@ -9,20 +9,22 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <!-- ===== MAIN CONTENT ===== -->
       <main class="flex-1 min-w-0">
 
-        <!-- Terminal hero -->
-        <div class="terminal-hero mb-6">
+        <!-- Terminal hero (interactive) -->
+        <div class="terminal-hero mb-6" id="terminal-hero">
           <div class="terminal-bar">
             <span class="t-dot" style="background:#ef4444;"></span>
             <span class="t-dot" style="background:#eab308;"></span>
             <span class="t-dot" style="background:#22c55e;"></span>
-            <span class="terminal-title">xmin@blog: ~</span>
+            <span class="terminal-title" id="term-title">xmin@blog: ~</span>
           </div>
-          <div class="terminal-body">
-            <div class="t-line"><span class="t-prompt">xmin@blog</span><span class="t-sep">:</span><span class="t-path">~</span><span class="t-dollar">$</span> <span class="t-cmd">whoami</span></div>
-            <div class="t-out">주수민 (xmin) — 보안 · AI · 개발</div>
-            <div class="t-line"><span class="t-prompt">xmin@blog</span><span class="t-sep">:</span><span class="t-path">~</span><span class="t-dollar">$</span> <span class="t-cmd">ls posts/</span></div>
-            <div class="t-out" id="hero-count">loading...</div>
-            <div class="t-line"><span class="t-prompt">xmin@blog</span><span class="t-sep">:</span><span class="t-path">~</span><span class="t-dollar">$</span> <span class="t-cursor">▊</span></div>
+          <div class="terminal-body" id="term-body" role="region" aria-label="블로그 터미널">
+            <div id="term-output" role="log" aria-live="polite"></div>
+            <div class="t-input-line" id="term-input-line">
+              <span class="t-prompt-block">
+                <span class="t-user">xmin@blog</span><span class="t-sep">:</span><span class="t-path" id="term-path">~</span><span class="t-dollar" id="term-dollar">$</span>
+              </span>
+              <input id="term-input" type="text" class="t-input" spellcheck="false" autocomplete="off" autocapitalize="off" />
+            </div>
           </div>
         </div>
 
@@ -193,9 +195,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     font-size: 0.82rem;
     line-height: 1.75;
     color: var(--color-text);
+    min-height: 200px;
+    max-height: 260px;
+    overflow-y: auto;
+    cursor: text;
   }
-  .t-line { white-space: nowrap; overflow-x: auto; }
+  .terminal-body::-webkit-scrollbar { width: 6px; }
+  .terminal-body::-webkit-scrollbar-track { background: transparent; }
+  .terminal-body::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+  .t-line { white-space: pre-wrap; word-break: break-word; }
   .t-prompt { color: var(--color-accent); font-weight: 600; }
+  .t-user { color: var(--color-accent); font-weight: 600; }
   .t-sep { color: var(--color-text-secondary); }
   .t-path { color: var(--color-accent-alt, #10b981); font-weight: 600; }
   .t-dollar { color: var(--color-text-secondary); margin-left: 0.15rem; margin-right: 0.35rem; }
@@ -213,6 +223,32 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     animation: t-blink 1.1s steps(2, start) infinite;
   }
   @keyframes t-blink { to { opacity: 0; } }
+
+  .t-input-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    white-space: nowrap;
+  }
+  .t-prompt-block { white-space: nowrap; flex-shrink: 0; }
+  .t-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--color-text);
+    font: inherit;
+    padding: 0;
+    caret-color: var(--color-accent);
+  }
+  .t-error { color: #ef4444; }
+  .t-ok { color: #22c55e; }
+  .t-warn { color: #eab308; }
+  .t-dim { color: var(--color-text-secondary); }
+  .t-post-name { color: var(--color-accent-bright, var(--color-accent)); }
+  .t-dir-name { color: var(--color-accent-alt, #10b981); font-weight: 600; }
+  .t-priv { color: #eab308; }
 </style>
 
 <script is:inline>
@@ -253,14 +289,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
           </button>
         </div>` : '';
+      const lockIcon = post.is_private ? `<svg class="inline-block w-3.5 h-3.5 align-[-2px] mr-1" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" style="color:#ca8a04;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>` : '';
       return `
         <div class="post-card-wrap">
           <a href="/post#${esc(post.slug)}" class="post-card" data-category="${esc(post.category)}">
             <div class="post-meta">
               ${post.category ? `<span class="post-cat">[${esc(post.category)}]</span>` : ''}
               <span>${esc(date)}</span>
+              ${post.is_private ? '<span style="color:#ca8a04;">비공개</span>' : ''}
             </div>
-            <h2 class="post-card-title">${esc(post.title)}</h2>
+            <h2 class="post-card-title">${lockIcon}${esc(post.title)}</h2>
             <p class="post-desc">${esc(post.description)}</p>
           </a>
           ${adminBtns}
@@ -330,15 +368,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       });
       const cats = Object.keys(catCounts);
 
-      // Terminal hero count line
-      const heroCount = document.getElementById('hero-count');
-      if (heroCount) {
-        const tagStr = cats.length
-          ? cats.map(c => `<span class="tag">[${esc(c)}]</span>`).join(' ')
-          : '';
-        heroCount.innerHTML = `<span class="num">${allPosts.length}</span> posts ${tagStr ? '· tags: ' + tagStr : ''}`;
-      }
-
       // Horizontal filter bar (top of main)
       const filterBar = document.getElementById('category-filter-bar');
       filterBar.innerHTML = ['전체', ...cats].map(cat => {
@@ -404,6 +433,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       });
 
       renderPosts(allPosts);
+      initTerminal(allPosts);
 
     } catch (err) {
       const loading = document.getElementById('loading');
@@ -412,6 +442,423 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       }
       console.error(err);
     }
+  }
+
+  // ── Interactive terminal ─────────────────────────────────────────────────
+
+  async function verifyPostPassword(slug, password) {
+    try {
+      const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return null;
+  }
+
+  function initTerminal(posts) {
+    const body = document.getElementById('term-body');
+    const out = document.getElementById('term-output');
+    const input = document.getElementById('term-input');
+    const pathEl = document.getElementById('term-path');
+    const dollarEl = document.getElementById('term-dollar');
+    const titleEl = document.getElementById('term-title');
+    const inputLine = document.getElementById('term-input-line');
+    if (!body || !input) return;
+
+    // Build virtual FS: /home/xmin/posts/<category>/<slug>
+    const fs = { _type: 'dir' };
+    const home = fs['home'] = { _type: 'dir' };
+    const xmin = home['xmin'] = { _type: 'dir' };
+    const postsDir = xmin['posts'] = { _type: 'dir' };
+    xmin['about'] = { _type: 'link', url: '/about' };
+    for (const p of posts) {
+      const cat = p.category || 'misc';
+      if (!postsDir[cat]) postsDir[cat] = { _type: 'dir' };
+      postsDir[cat][p.slug] = {
+        _type: 'post',
+        slug: p.slug,
+        title: p.title,
+        description: p.description || '',
+        date: p.date || '',
+        tags: p.tags || [],
+        is_private: !!p.is_private,
+      };
+    }
+
+    let cwd = '/home/xmin';
+    const history = [];
+    let historyIdx = -1;
+    let pendingPw = null; // { slug, newTab }
+
+    function isMeta(k) { return k === '_type' || k === 'url' || k === 'slug' || k === 'title' || k === 'description' || k === 'date' || k === 'tags' || k === 'is_private'; }
+
+    function getNode(path) {
+      const parts = path.split('/').filter(Boolean);
+      let node = fs;
+      for (const p of parts) {
+        if (!node || typeof node !== 'object' || !node[p]) return null;
+        node = node[p];
+      }
+      return node;
+    }
+
+    function resolvePath(arg) {
+      if (!arg || arg === '~') return '/home/xmin';
+      if (arg.startsWith('~/')) arg = '/home/xmin/' + arg.slice(2);
+      const base = arg.startsWith('/') ? '' : cwd;
+      const parts = (base + '/' + arg).split('/').filter(Boolean);
+      const resolved = [];
+      for (const p of parts) {
+        if (p === '..') resolved.pop();
+        else if (p !== '.') resolved.push(p);
+      }
+      return '/' + resolved.join('/');
+    }
+
+    function shortPath(p) {
+      if (p === '/home/xmin') return '~';
+      if (p.startsWith('/home/xmin/')) return '~/' + p.slice(11);
+      return p;
+    }
+
+    function updatePrompt() {
+      pathEl.textContent = shortPath(cwd);
+      titleEl.textContent = 'xmin@blog: ' + shortPath(cwd);
+    }
+
+    function append(html, cls) {
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.innerHTML = html;
+      out.appendChild(line);
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function echoCmd(raw) {
+      append(`<span class="t-user">xmin@blog</span><span class="t-sep">:</span><span class="t-path">${esc(shortPath(cwd))}</span><span class="t-dollar">$</span> ${esc(raw)}`);
+    }
+
+    function lsDir(node) {
+      const dirs = [], posts = [], links = [];
+      for (const k of Object.keys(node)) {
+        if (isMeta(k)) continue;
+        const child = node[k];
+        if (!child || typeof child !== 'object') continue;
+        if (child._type === 'dir') dirs.push(k);
+        else if (child._type === 'post') posts.push({ k, is_private: child.is_private });
+        else if (child._type === 'link') links.push(k);
+      }
+      dirs.sort(); posts.sort((a,b)=>a.k.localeCompare(b.k)); links.sort();
+      return { dirs, posts, links };
+    }
+
+    function cmdLs(args) {
+      const target = args.trim() || '';
+      const path = resolvePath(target);
+      const node = getNode(path);
+      if (!node || node._type !== 'dir') {
+        append(`<span class="t-error">ls: ${esc(target || path)}: 디렉터리 없음</span>`);
+        return;
+      }
+      const { dirs, posts, links } = lsDir(node);
+      const parts = [];
+      for (const d of dirs) parts.push(`<span class="t-dir-name">${esc(d)}/</span>`);
+      for (const p of posts) {
+        const lock = p.is_private ? '<span class="t-priv">🔒</span>' : '';
+        parts.push(`${lock}<span class="t-post-name">${esc(p.k)}</span>*`);
+      }
+      for (const l of links) parts.push(`<span class="t-ok">${esc(l)}@</span>`);
+      if (!parts.length) { append('<span class="t-dim">(비어 있음)</span>'); return; }
+      append(parts.join('  '));
+    }
+
+    function cmdCd(args) {
+      const t = args.trim();
+      if (!t) { cwd = '/home/xmin'; updatePrompt(); return; }
+      const path = resolvePath(t);
+      const node = getNode(path);
+      if (!node) { append(`<span class="t-error">cd: ${esc(t)}: 디렉터리 없음</span>`); return; }
+      if (node._type !== 'dir') { append(`<span class="t-error">cd: ${esc(t)}: 디렉터리가 아님</span>`); return; }
+      cwd = path;
+      updatePrompt();
+    }
+
+    function cmdPwd() { append(`<span class="t-dim">${esc(cwd)}</span>`); }
+
+    function findPost(arg) {
+      // Try current dir first
+      let path = resolvePath(arg);
+      let node = getNode(path);
+      if (node && node._type === 'post') return { node, path };
+      // Search all categories for a matching slug
+      for (const catKey of Object.keys(postsDir)) {
+        if (isMeta(catKey)) continue;
+        const cat = postsDir[catKey];
+        if (cat && cat._type === 'dir' && cat[arg] && cat[arg]._type === 'post') {
+          return { node: cat[arg], path: `/home/xmin/posts/${catKey}/${arg}` };
+        }
+      }
+      return null;
+    }
+
+    function cmdCat(args) {
+      const t = args.trim();
+      if (!t) { append('<span class="t-error">cat: 인자 필요</span>'); return; }
+      const found = findPost(t);
+      if (!found) { append(`<span class="t-error">cat: ${esc(t)}: 파일 없음</span>`); return; }
+      const n = found.node;
+      const tagStr = (n.tags || []).map(x => `<span class="tag">[${esc(x)}]</span>`).join(' ');
+      const lock = n.is_private ? ' <span class="t-priv">🔒 비공개</span>' : '';
+      append(`<span class="t-warn">── ${esc(n.title)} ──</span>${lock}`);
+      append(`<span class="t-dim">${esc(n.date)} · ${esc(n.slug)}</span>`);
+      if (n.description) append(esc(n.description));
+      if (tagStr) append(tagStr);
+      append(`<span class="t-dim">열기: <span class="t-ok">open ${esc(n.slug)}</span> <span class="t-dim">(-n 새 탭)</span></span>`);
+    }
+
+    function navigate(slug, newTab) {
+      const url = `/post#${encodeURIComponent(slug)}`;
+      if (newTab) window.open(url, '_blank');
+      else window.location.href = url;
+    }
+
+    async function openWithPasswordCheck(node, newTab) {
+      if (!node.is_private) { navigate(node.slug, newTab); return; }
+      const cached = sessionStorage.getItem(`post_pw_${node.slug}`);
+      if (cached) {
+        const ok = await verifyPostPassword(node.slug, cached);
+        if (ok && ok.content != null) { navigate(node.slug, newTab); return; }
+        sessionStorage.removeItem(`post_pw_${node.slug}`);
+      }
+      // Inline password prompt
+      pendingPw = { slug: node.slug, newTab };
+      input.type = 'password';
+      input.placeholder = '암호';
+      pathEl.innerHTML = `<span class="t-priv">password:${esc(node.slug)}</span>`;
+      dollarEl.textContent = '';
+      append(`<span class="t-warn">🔒 비공개 글입니다. 암호를 입력하세요 (취소: Ctrl+C)</span>`);
+    }
+
+    async function cmdOpen(args) {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      let newTab = false;
+      let slug = '';
+      for (const p of parts) {
+        if (p === '-n' || p === '--new') newTab = true;
+        else slug = p;
+      }
+      if (!slug) { append('<span class="t-error">open: 인자 필요 (예: open hello-world)</span>'); return; }
+      const found = findPost(slug);
+      if (!found) { append(`<span class="t-error">open: ${esc(slug)}: 글 없음</span>`); return; }
+      await openWithPasswordCheck(found.node, newTab);
+    }
+
+    function cmdHelp() {
+      append('<span class="t-warn">사용 가능한 명령어:</span>');
+      append('  <span class="t-ok">whoami</span>         프로필 보기');
+      append('  <span class="t-ok">ls</span> [path]      현재/지정 디렉터리 목록');
+      append('  <span class="t-ok">cd</span> [path]      디렉터리 이동 (ls posts/ 후 cd posts/&lt;category&gt;)');
+      append('  <span class="t-ok">cat</span> &lt;slug&gt;      글 메타 정보 보기');
+      append('  <span class="t-ok">open</span> [-n] &lt;slug&gt;  글 열기 (-n: 새 탭)');
+      append('  <span class="t-ok">pwd</span>            현재 경로');
+      append('  <span class="t-ok">categories</span>     카테고리 전체 목록');
+      append('  <span class="t-ok">tags</span>           태그 전체 목록');
+      append('  <span class="t-ok">search</span> &lt;q&gt;    제목/설명 검색');
+      append('  <span class="t-ok">clear</span>          화면 지우기 (Ctrl+L)');
+      append('  <span class="t-ok">history</span>        명령어 이력');
+      append('  <span class="t-dim">단축키: ↑↓ 이력 · Tab 자동완성 · Ctrl+C 취소 · Ctrl+L 클리어</span>');
+    }
+
+    function cmdWhoami() {
+      append('<span class="t-user">주수민 (xmin)</span> <span class="t-dim">— 보안 · AI · 개발</span>');
+      append('<span class="t-dim">Baekseok Univ. · NGMS Security Lab · ZDI-25-1055</span>');
+      append('<span class="t-dim">blog:</span> <span class="t-ok">xmin.blog</span> <span class="t-dim">· portfolio:</span> <span class="t-ok">xmin.sh</span>');
+    }
+
+    function cmdCategories() {
+      const cats = Object.keys(postsDir).filter(k => !isMeta(k)).sort();
+      if (!cats.length) { append('<span class="t-dim">(비어 있음)</span>'); return; }
+      for (const c of cats) {
+        const count = Object.keys(postsDir[c]).filter(k => !isMeta(k)).length;
+        append(`  <span class="t-dir-name">${esc(c)}/</span> <span class="t-dim">(${count})</span>`);
+      }
+    }
+
+    function cmdTags() {
+      const counts = {};
+      for (const p of posts) for (const t of (p.tags || [])) counts[t] = (counts[t] || 0) + 1;
+      const keys = Object.keys(counts).sort();
+      if (!keys.length) { append('<span class="t-dim">(태그 없음)</span>'); return; }
+      append(keys.map(k => `<span class="tag">[${esc(k)}]</span> <span class="t-dim">×${counts[k]}</span>`).join('  '));
+    }
+
+    function cmdSearch(args) {
+      const q = args.trim().toLowerCase();
+      if (!q) { append('<span class="t-error">search: 검색어 필요</span>'); return; }
+      const hits = posts.filter(p =>
+        (p.title || '').toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q)
+      );
+      if (!hits.length) { append('<span class="t-dim">일치하는 글 없음</span>'); return; }
+      for (const h of hits) {
+        const lock = h.is_private ? ' <span class="t-priv">🔒</span>' : '';
+        append(`  <span class="t-post-name">${esc(h.slug)}</span>${lock} <span class="t-dim">— ${esc(h.title)}</span>`);
+      }
+    }
+
+    function cmdHistory() {
+      if (!history.length) { append('<span class="t-dim">이력 없음</span>'); return; }
+      for (let i = 0; i < history.length; i++) {
+        append(`  <span class="t-dim">${i + 1}</span>  ${esc(history[i])}`);
+      }
+    }
+
+    function cmdClear() { out.innerHTML = ''; }
+
+    async function exec(raw) {
+      echoCmd(raw);
+      const parts = raw.split(/\s+/);
+      const cmd = parts[0].toLowerCase();
+      const args = parts.slice(1).join(' ');
+      switch (cmd) {
+        case 'help': case '?': cmdHelp(); break;
+        case 'whoami': cmdWhoami(); break;
+        case 'ls': case 'dir': cmdLs(args); break;
+        case 'cd': cmdCd(args); break;
+        case 'pwd': cmdPwd(); break;
+        case 'cat': case 'less': case 'more': cmdCat(args); break;
+        case 'open': case 'run': case 'exec': await cmdOpen(args); break;
+        case 'categories': case 'cats': cmdCategories(); break;
+        case 'tags': cmdTags(); break;
+        case 'search': case 'grep': case 'find': cmdSearch(args); break;
+        case 'history': cmdHistory(); break;
+        case 'clear': case 'cls': cmdClear(); break;
+        case 'date': append(new Date().toLocaleString('ko-KR')); break;
+        case 'echo': append(esc(args)); break;
+        case 'exit': case 'logout': append('<span class="t-dim">bye ✦</span>'); input.disabled = true; break;
+        default:
+          if (cmd.startsWith('./')) await cmdOpen(cmd.slice(2) + (args ? ' ' + args : ''));
+          else append(`<span class="t-error">command not found: ${esc(cmd)}</span> <span class="t-dim">(help 입력)</span>`);
+      }
+    }
+
+    function autocomplete(val) {
+      const parts = val.split(/\s+/);
+      const builtins = ['help','whoami','ls','cd','pwd','cat','open','categories','tags','search','history','clear','date','echo','exit'];
+      if (parts.length <= 1) {
+        const partial = parts[0].toLowerCase();
+        const matches = builtins.filter(c => c.startsWith(partial));
+        if (matches.length === 1) return matches[0];
+        if (matches.length > 1) append('<span class="t-dim">' + matches.join('  ') + '</span>');
+        return val;
+      }
+      const cmd = parts[0].toLowerCase();
+      const partial = parts[parts.length - 1];
+      const lastSlash = partial.lastIndexOf('/');
+      const prefix = lastSlash >= 0 ? partial.slice(0, lastSlash + 1) : '';
+      const name = lastSlash >= 0 ? partial.slice(lastSlash + 1) : partial;
+      const lookupPath = resolvePath(prefix || '.');
+      const node = getNode(lookupPath);
+      if (!node || node._type !== 'dir') return val;
+      const { dirs, posts: postsArr } = lsDir(node);
+      let pool = [...dirs];
+      if (cmd === 'cat' || cmd === 'open' || cmd === 'run' || cmd === 'exec' || cmd === 'less' || cmd === 'more') pool = pool.concat(postsArr.map(p => p.k));
+      if (cmd === 'ls' || cmd === 'cd') { /* dirs only */ }
+      if (cmd !== 'ls' && cmd !== 'cd' && cmd !== 'cat' && cmd !== 'open' && cmd !== 'run' && cmd !== 'exec' && cmd !== 'less' && cmd !== 'more') {
+        pool = pool.concat(postsArr.map(p => p.k));
+      }
+      const matches = pool.filter(f => f.toLowerCase().startsWith(name.toLowerCase()));
+      if (matches.length === 1) {
+        parts[parts.length - 1] = prefix + matches[0];
+        return parts.join(' ');
+      }
+      if (matches.length > 1) append('<span class="t-dim">' + matches.join('  ') + '</span>');
+      return val;
+    }
+
+    // Input keydown
+    input.addEventListener('keydown', async (e) => {
+      if (pendingPw) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const pw = input.value;
+          input.value = '';
+          if (!pw) return;
+          const { slug, newTab } = pendingPw;
+          append(`<span class="t-dim">[password] ••••••</span>`);
+          const ok = await verifyPostPassword(slug, pw);
+          if (ok && ok.content != null) {
+            sessionStorage.setItem(`post_pw_${slug}`, pw);
+            append(`<span class="t-ok">✓ 잠금 해제 — ${esc(slug)} 열기...</span>`);
+            pendingPw = null;
+            input.type = 'text'; input.placeholder = '';
+            updatePrompt();
+            dollarEl.textContent = '$';
+            setTimeout(() => navigate(slug, newTab), 250);
+          } else {
+            append('<span class="t-error">✗ 암호가 올바르지 않습니다.</span>');
+          }
+          return;
+        }
+        if ((e.ctrlKey && e.key === 'c') || e.key === 'Escape') {
+          e.preventDefault();
+          append('<span class="t-dim">취소됨</span>');
+          pendingPw = null;
+          input.type = 'text'; input.value = ''; input.placeholder = '';
+          updatePrompt();
+          dollarEl.textContent = '$';
+          return;
+        }
+        return;
+      }
+
+      if (e.ctrlKey && e.key.toLowerCase() === 'l') { e.preventDefault(); cmdClear(); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        echoCmd(input.value + '^C');
+        input.value = '';
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        input.value = autocomplete(input.value);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (historyIdx < history.length - 1) { historyIdx++; input.value = history[history.length - 1 - historyIdx]; }
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIdx > 0) { historyIdx--; input.value = history[history.length - 1 - historyIdx]; }
+        else { historyIdx = -1; input.value = ''; }
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const raw = input.value.trim();
+        input.value = '';
+        if (!raw) return;
+        history.push(raw); historyIdx = -1;
+        await exec(raw);
+      }
+    });
+
+    body.addEventListener('click', () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) input.focus();
+    });
+
+    // Welcome
+    append('<span class="t-ok">Welcome — xmin@blog</span>');
+    append(`<span class="t-dim">${posts.length} posts · 카테고리: ${Object.keys(postsDir).filter(k=>!isMeta(k)).sort().map(c=>`<span class="tag">${esc(c)}</span>`).join(' ')}</span>`);
+    append('<span class="t-dim">명령어 보기: <span class="t-ok">help</span>  ·  예: <span class="t-ok">ls posts/</span> → <span class="t-ok">cd posts/Linux</span> → <span class="t-ok">open &lt;slug&gt;</span></span>');
+    append('');
+    updatePrompt();
   }
 
   loadPosts();

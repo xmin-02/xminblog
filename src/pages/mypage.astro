@@ -1,0 +1,356 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="마이페이지 — xmin.blog">
+  <div class="mx-auto max-w-3xl px-4 sm:px-5 py-10">
+    <header class="mb-8">
+      <h1 class="text-2xl font-bold tracking-tight" style="font-family:var(--font-display);">마이페이지</h1>
+      <p class="text-sm text-[var(--color-text-secondary)] mt-1" style="font-family:var(--font-mono);">// 프로필 · 비밀번호 · 댓글 · 글</p>
+    </header>
+
+    <div id="mp-loading" class="text-center py-20 text-[var(--color-text-secondary)]">
+      <div class="inline-block w-6 h-6 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin mb-3"></div>
+      <p class="text-sm">불러오는 중...</p>
+    </div>
+
+    <div id="mp-not-logged-in" class="hidden text-center py-16">
+      <p class="text-base mb-4">로그인이 필요합니다.</p>
+      <a href="/login" class="inline-block px-4 py-2 rounded-md text-sm font-semibold" style="background:var(--color-accent);color:white;">로그인</a>
+    </div>
+
+    <div id="mp-content" class="hidden space-y-8">
+      <!-- Profile -->
+      <section class="sidebar-widget" style="padding:1.5rem 1.75rem;">
+        <p class="sidebar-widget-title">프로필</p>
+        <div class="flex items-start gap-4 mb-5">
+          <span id="mp-avatar"
+            class="w-16 h-16 rounded-full overflow-hidden flex items-center justify-center text-white text-xl font-bold flex-shrink-0"
+            style="background:linear-gradient(135deg,#0d9488,#0f766e);">?</span>
+          <div class="min-w-0 flex-1">
+            <p class="text-base font-bold" id="mp-nickname" style="font-family:var(--font-display);">—</p>
+            <p class="text-xs text-[var(--color-text-secondary)] truncate" id="mp-email" style="font-family:var(--font-mono);">—</p>
+            <p class="text-xs mt-1" id="mp-role" style="font-family:var(--font-mono);"></p>
+          </div>
+        </div>
+
+        <form id="mp-profile-form" class="space-y-3">
+          <div>
+            <label class="block text-xs text-[var(--color-text-secondary)] mb-1" style="font-family:var(--font-mono);">닉네임</label>
+            <input id="mp-nickname-input" type="text" maxlength="40"
+              class="w-full px-3 py-2 rounded-md text-sm outline-none transition-colors"
+              style="background:var(--color-bg-secondary);color:var(--color-text);border:1px solid var(--color-border);" />
+          </div>
+          <div>
+            <label class="block text-xs text-[var(--color-text-secondary)] mb-1" style="font-family:var(--font-mono);">프로필 이미지 URL</label>
+            <input id="mp-avatar-input" type="url" placeholder="https://..."
+              class="w-full px-3 py-2 rounded-md text-sm outline-none transition-colors"
+              style="background:var(--color-bg-secondary);color:var(--color-text);border:1px solid var(--color-border);font-family:var(--font-mono);" />
+            <p class="text-[10px] text-[var(--color-text-secondary)] mt-1" style="font-family:var(--font-mono);">// 외부 URL만 지원 (업로드 미지원)</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="submit"
+              class="px-4 py-2 rounded-md text-sm font-semibold transition-opacity"
+              style="background:var(--color-accent);color:white;">저장</button>
+            <span id="mp-profile-status" class="text-xs"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- Password -->
+      <section class="sidebar-widget" style="padding:1.5rem 1.75rem;">
+        <p class="sidebar-widget-title">비밀번호 변경</p>
+        <div id="mp-pw-admin-notice" class="hidden text-xs text-[var(--color-text-secondary)]" style="font-family:var(--font-mono);">
+          // 관리자 비밀번호는 서버 .env에서 관리합니다.
+        </div>
+        <form id="mp-pw-form" class="space-y-3 hidden">
+          <div>
+            <label class="block text-xs text-[var(--color-text-secondary)] mb-1" style="font-family:var(--font-mono);">현재 비밀번호</label>
+            <input id="mp-pw-old" type="password" required
+              class="w-full px-3 py-2 rounded-md text-sm outline-none transition-colors"
+              style="background:var(--color-bg-secondary);color:var(--color-text);border:1px solid var(--color-border);font-family:var(--font-mono);" />
+          </div>
+          <div>
+            <label class="block text-xs text-[var(--color-text-secondary)] mb-1" style="font-family:var(--font-mono);">새 비밀번호 (8자 이상)</label>
+            <input id="mp-pw-new" type="password" required minlength="8"
+              class="w-full px-3 py-2 rounded-md text-sm outline-none transition-colors"
+              style="background:var(--color-bg-secondary);color:var(--color-text);border:1px solid var(--color-border);font-family:var(--font-mono);" />
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="submit"
+              class="px-4 py-2 rounded-md text-sm font-semibold transition-opacity"
+              style="background:var(--color-accent);color:white;">변경</button>
+            <span id="mp-pw-status" class="text-xs"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- My Posts (admin only) -->
+      <section id="mp-posts-section" class="sidebar-widget hidden" style="padding:1.5rem 1.75rem;">
+        <p class="sidebar-widget-title">내가 쓴 글</p>
+        <div id="mp-posts-list" class="space-y-2">
+          <p class="text-xs text-[var(--color-text-secondary)]">불러오는 중...</p>
+        </div>
+      </section>
+
+      <!-- My Comments -->
+      <section class="sidebar-widget" style="padding:1.5rem 1.75rem;">
+        <p class="sidebar-widget-title">내가 쓴 댓글</p>
+        <div id="mp-comments-list" class="space-y-3">
+          <p class="text-xs text-[var(--color-text-secondary)]">불러오는 중...</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .animate-spin { animation: spin 0.8s linear infinite; }
+
+  .mp-row {
+    padding: 0.75rem 0.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-secondary);
+    transition: border-color 0.15s;
+  }
+  .mp-row:hover { border-color: var(--color-accent); }
+  .mp-link {
+    color: var(--color-accent);
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .mp-link:hover { text-decoration: underline; }
+  .mp-meta {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-text-secondary);
+  }
+  .mp-del-btn {
+    font-size: 0.7rem;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.3rem;
+    transition: color 0.15s, background 0.15s;
+  }
+  .mp-del-btn:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
+  .mp-priv {
+    color: #ca8a04;
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    margin-left: 0.35rem;
+  }
+</style>
+
+<script is:inline>
+  const API_BASE = 'https://api.xmin.blog';
+
+  function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  let _user = null;
+
+  async function mpInit() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      document.getElementById('mp-loading').classList.add('hidden');
+      document.getElementById('mp-not-logged-in').classList.remove('hidden');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error('Unauthorized');
+      _user = await res.json();
+      // refresh localStorage user with latest avatar/nickname
+      localStorage.setItem('auth_user', JSON.stringify(_user));
+    } catch {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      document.getElementById('mp-loading').classList.add('hidden');
+      document.getElementById('mp-not-logged-in').classList.remove('hidden');
+      return;
+    }
+    document.getElementById('mp-loading').classList.add('hidden');
+    document.getElementById('mp-content').classList.remove('hidden');
+    renderProfile();
+    renderPasswordSection();
+    if (_user.role === 'admin') {
+      document.getElementById('mp-posts-section').classList.remove('hidden');
+      loadMyPosts();
+    }
+    loadMyComments();
+  }
+
+  function renderProfile() {
+    const display = _user.nickname || (_user.email ? _user.email.split('@')[0] : '?');
+    document.getElementById('mp-nickname').textContent = display;
+    document.getElementById('mp-email').textContent = _user.email;
+    const roleEl = document.getElementById('mp-role');
+    if (_user.role === 'admin') {
+      roleEl.innerHTML = '<span style="color:var(--color-accent);">[admin]</span>';
+    } else {
+      roleEl.innerHTML = '<span style="color:var(--color-text-secondary);">[user]</span>';
+    }
+    const avatarEl = document.getElementById('mp-avatar');
+    if (_user.avatar_url) {
+      avatarEl.innerHTML = `<img src="${esc(_user.avatar_url)}" alt="" class="w-full h-full object-cover" onerror="this.parentNode.textContent='${esc((display[0]||'?').toUpperCase())}'" />`;
+    } else {
+      avatarEl.textContent = (display[0] || '?').toUpperCase();
+    }
+    document.getElementById('mp-nickname-input').value = display;
+    document.getElementById('mp-avatar-input').value = _user.avatar_url || '';
+  }
+
+  document.getElementById('mp-profile-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const status = document.getElementById('mp-profile-status');
+    const nickname = document.getElementById('mp-nickname-input').value.trim();
+    const avatar_url = document.getElementById('mp-avatar-input').value.trim();
+    status.textContent = '저장 중...';
+    status.style.color = 'var(--color-text-secondary)';
+    const token = localStorage.getItem('auth_token');
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ nickname, avatar_url }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      _user = { ..._user, ...data };
+      localStorage.setItem('auth_user', JSON.stringify(_user));
+      renderProfile();
+      status.textContent = '저장됨';
+      status.style.color = '#10b981';
+      setTimeout(() => { status.textContent = ''; }, 2500);
+    } catch (err) {
+      status.textContent = '오류: ' + err.message;
+      status.style.color = '#ef4444';
+    }
+  });
+
+  function renderPasswordSection() {
+    const notice = document.getElementById('mp-pw-admin-notice');
+    const form = document.getElementById('mp-pw-form');
+    if (_user.role === 'admin') {
+      notice.classList.remove('hidden');
+      form.classList.add('hidden');
+    } else {
+      notice.classList.add('hidden');
+      form.classList.remove('hidden');
+    }
+  }
+
+  document.getElementById('mp-pw-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const status = document.getElementById('mp-pw-status');
+    const oldPw = document.getElementById('mp-pw-old').value;
+    const newPw = document.getElementById('mp-pw-new').value;
+    if (newPw.length < 8) { status.textContent = '새 비밀번호는 8자 이상'; status.style.color = '#ef4444'; return; }
+    status.textContent = '변경 중...';
+    status.style.color = 'var(--color-text-secondary)';
+    const token = localStorage.getItem('auth_token');
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ old_password: oldPw, new_password: newPw }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      status.textContent = '변경됨';
+      status.style.color = '#10b981';
+      document.getElementById('mp-pw-old').value = '';
+      document.getElementById('mp-pw-new').value = '';
+      setTimeout(() => { status.textContent = ''; }, 2500);
+    } catch (err) {
+      status.textContent = '오류: ' + err.message;
+      status.style.color = '#ef4444';
+    }
+  });
+
+  async function loadMyPosts() {
+    const list = document.getElementById('mp-posts-list');
+    try {
+      const res = await fetch(`${API_BASE}/api/posts`);
+      if (!res.ok) throw new Error('failed');
+      const posts = await res.json();
+      if (!posts.length) { list.innerHTML = '<p class="text-xs text-[var(--color-text-secondary)]">글이 없습니다.</p>'; return; }
+      list.innerHTML = posts.map(p => {
+        const date = p.date ? new Date(p.date).toLocaleDateString('ko-KR') : '';
+        const draft = p.draft ? '<span class="mp-priv">[draft]</span>' : '';
+        const priv = p.is_private ? '<span class="mp-priv">[private]</span>' : '';
+        return `<div class="mp-row flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <a href="/post#${esc(p.slug)}" class="mp-link text-sm">${esc(p.title)}</a>${draft}${priv}
+            <p class="mp-meta mt-0.5">${esc(date)} · [${esc(p.category)}] · ${esc(p.slug)}</p>
+          </div>
+          <div class="flex gap-1 flex-shrink-0">
+            <a href="/post#${esc(p.slug)}" class="mp-del-btn" style="color:var(--color-accent);">편집</a>
+            <button class="mp-del-btn" onclick="mpDeletePost('${esc(p.slug)}')">삭제</button>
+          </div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      list.innerHTML = `<p class="text-xs" style="color:#ef4444;">불러오기 실패: ${esc(err.message)}</p>`;
+    }
+  }
+
+  async function mpDeletePost(slug) {
+    if (!confirm(`"${slug}" 글을 삭제할까요?`)) return;
+    const token = localStorage.getItem('auth_token');
+    try {
+      const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) loadMyPosts();
+      else { const d = await res.json(); alert('삭제 실패: ' + (d.error || res.status)); }
+    } catch (e) { alert('오류: ' + e.message); }
+  }
+
+  async function loadMyComments() {
+    const list = document.getElementById('mp-comments-list');
+    const token = localStorage.getItem('auth_token');
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/my-comments`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error('failed');
+      const comments = await res.json();
+      if (!comments.length) { list.innerHTML = '<p class="text-xs text-[var(--color-text-secondary)]">댓글이 없습니다.</p>'; return; }
+      list.innerHTML = comments.map(c => {
+        const date = new Date(Number(c.created_at) * 1000).toLocaleString('ko-KR');
+        return `<div class="mp-row" id="mp-c-${c.id}">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <a href="/post#${esc(c.post_slug)}" class="mp-link text-xs">/post#${esc(c.post_slug)}</a>
+            <button class="mp-del-btn" onclick="mpDeleteComment(${c.id})">삭제</button>
+          </div>
+          <p class="text-sm leading-relaxed" style="color:var(--color-text);">${esc(c.content)}</p>
+          <p class="mp-meta mt-1.5">${esc(date)}</p>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      list.innerHTML = `<p class="text-xs" style="color:#ef4444;">불러오기 실패: ${esc(err.message)}</p>`;
+    }
+  }
+
+  async function mpDeleteComment(id) {
+    if (!confirm('댓글을 삭제할까요?')) return;
+    const token = localStorage.getItem('auth_token');
+    try {
+      const res = await fetch(`${API_BASE}/api/comments/id/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) document.getElementById(`mp-c-${id}`)?.remove();
+      else alert('삭제 실패');
+    } catch (e) { alert('오류: ' + e.message); }
+  }
+
+  mpInit();
+</script>

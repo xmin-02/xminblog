@@ -407,7 +407,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     if (slug === 'new') {
       _isNewPost = true;
       _currentSlug = '';
-      _currentPost = { title: '', description: '', content: '', category: '', tags: [], date: new Date().toISOString().slice(0, 10), draft: false, cover: '' };
+      _currentPost = { title: '', description: '', content: '', category: '', tags: [], date: new Date().toISOString().slice(0, 10), draft: false, cover: '', is_private: false };
       document.title = '새 글 작성 — xmin.blog';
       const container = document.getElementById('post-container');
       container.innerHTML = '<article></article>';
@@ -423,15 +423,32 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const container = document.getElementById('post-container');
 
     try {
+      const token = localStorage.getItem('auth_token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
       const [postRes, allRes] = await Promise.all([
-        fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`),
-        fetch(`${API_BASE}/api/posts`),
+        fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`, { headers: authHeaders }),
+        fetch(`${API_BASE}/api/posts`, { headers: authHeaders }),
       ]);
 
       if (!postRes.ok) throw new Error('Post not found');
       const post = await postRes.json();
       _currentPost = post;
       const allPosts = allRes.ok ? (await allRes.json()).filter(p => !p.draft) : [];
+
+      // Private post: try cached password first
+      if (post.is_private && post.content == null) {
+        const cached = sessionStorage.getItem(`post_pw_${slug}`);
+        if (cached) {
+          const unlocked = await verifyPostPassword(slug, cached);
+          if (unlocked) {
+            post.content = unlocked.content;
+            _currentPost.content = unlocked.content;
+          } else {
+            sessionStorage.removeItem(`post_pw_${slug}`);
+          }
+        }
+      }
+      const isLocked = post.is_private && post.content == null;
 
       document.title = `${post.title} — xmin.blog`;
 
@@ -486,8 +503,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
                 </div>` : '';
             } catch { return ''; }
           })()}
-          <div class="prose prose-lg max-w-none" id="prose-content">${renderMarkdown(post.content || '')}</div>
+          ${post.is_private ? `
+            <div class="inline-flex items-center gap-1.5 mb-6 px-2.5 py-1 rounded-full text-xs font-medium"
+              style="background:rgba(234,179,8,0.1);color:#ca8a04;border:1px solid rgba(234,179,8,0.3);font-family:var(--font-mono);">
+              <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+              비공개
+            </div>` : ''}
+          ${isLocked ? renderPasswordGate() : `<div class="prose prose-lg max-w-none" id="prose-content">${renderMarkdown(post.content || '')}</div>`}
 
+          ${isLocked ? '' : `
           <!-- Like button -->
           <div class="flex items-center gap-3 mt-10 pt-6 border-t border-[var(--color-border)]">
             <button id="like-btn" class="like-btn" onclick="handleLike()">
@@ -497,7 +521,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             <span class="text-xs text-[var(--color-text-secondary)]">이 글이 도움이 됐나요?</span>
           </div>
 
-          ${navHtml}
+          ${navHtml}`}
 
           <div class="mt-10 pt-6 border-t border-[var(--color-border)]">
             <a href="/" class="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] transition-colors">
@@ -510,19 +534,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         </article>
       `;
 
-      // Build TOC
-      const proseEl = document.getElementById('prose-content');
-      if (proseEl) buildToc(proseEl);
+      // Wire up password gate (if locked)
+      if (isLocked) {
+        const pwForm = document.getElementById('pw-form');
+        if (pwForm) pwForm.addEventListener('submit', submitPostPassword);
+      }
 
-      // Load likes
-      await loadLikes(slug);
+      if (!isLocked) {
+        // Build TOC
+        const proseEl = document.getElementById('prose-content');
+        if (proseEl) buildToc(proseEl);
 
-      // Show comments section and load
-      const commentsSection = document.getElementById('comments-section');
-      if (commentsSection) {
-        commentsSection.classList.remove('hidden');
-        renderCommentForm(slug);
-        await loadComments(slug);
+        // Load likes
+        await loadLikes(slug);
+
+        // Show comments section and load
+        const commentsSection = document.getElementById('comments-section');
+        if (commentsSection) {
+          commentsSection.classList.remove('hidden');
+          renderCommentForm(slug);
+          await loadComments(slug);
+        }
       }
 
       // Populate sidebar recent posts
@@ -547,6 +579,61 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           <p class="text-base font-medium mb-2">글을 찾을 수 없습니다.</p>
           <a href="/" class="text-sm text-[var(--color-accent)] hover:underline">홈으로 돌아가기</a>
         </div>`;
+    }
+  }
+
+  // ── Private post gate ────────────────────────────────────────────────────
+
+  function renderPasswordGate() {
+    return `
+      <div id="password-gate" class="my-8 py-12 px-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] text-center">
+        <svg width="36" height="36" class="mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24" style="color:var(--color-accent);">
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
+          <path d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+        <h3 class="text-sm font-semibold mb-1.5" style="font-family:var(--font-display);">비공개 글</h3>
+        <p class="text-xs text-[var(--color-text-secondary)] mb-5">이 글을 읽으려면 암호가 필요합니다.</p>
+        <form id="pw-form" class="flex gap-2 max-w-xs mx-auto">
+          <input id="pw-input" type="password" autocomplete="off" autofocus placeholder="암호"
+            class="flex-1 px-3 py-2 rounded-md text-sm outline-none transition-colors"
+            style="background:var(--color-bg-secondary);color:var(--color-text);border:1px solid var(--color-border);font-family:var(--font-mono);" />
+          <button type="submit"
+            class="px-4 py-2 rounded-md text-sm font-semibold transition-opacity"
+            style="background:var(--color-accent);color:white;">확인</button>
+        </form>
+        <p id="pw-err" class="text-xs mt-3 hidden" style="color:#ef4444;"></p>
+      </div>`;
+  }
+
+  async function verifyPostPassword(slug, password) {
+    try {
+      const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return null;
+  }
+
+  async function submitPostPassword(e) {
+    e.preventDefault();
+    const input = document.getElementById('pw-input');
+    const err = document.getElementById('pw-err');
+    const pw = input?.value;
+    if (!pw) return;
+    err.classList.add('hidden');
+    const unlocked = await verifyPostPassword(_currentSlug, pw);
+    if (unlocked && unlocked.content != null) {
+      sessionStorage.setItem(`post_pw_${_currentSlug}`, pw);
+      _currentPost.content = unlocked.content;
+      loadPost();
+    } else {
+      err.textContent = '암호가 올바르지 않습니다.';
+      err.classList.remove('hidden');
+      input.value = '';
+      input.focus();
     }
   }
 
@@ -637,6 +724,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             <label class="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] cursor-pointer select-none">
               <input id="edit-draft" type="checkbox" class="accent-[var(--color-accent)]" ${post.draft ? 'checked' : ''}> 임시저장
             </label>
+            <label class="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] cursor-pointer select-none">
+              <input id="edit-private" type="checkbox" class="accent-[var(--color-accent)]" ${post.is_private ? 'checked' : ''} onchange="togglePrivateInput()"> 비공개
+            </label>
           </div>
           <div class="flex items-center gap-2">
             <span id="edit-status" class="text-xs"></span>
@@ -673,8 +763,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
         <!-- Editable cover image URL -->
         <input id="edit-cover" type="url" value="${esc(post.cover || '')}" placeholder="대표 이미지 URL (선택)"
-          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-8 block"
+          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-3 block"
           style="max-width:480px;font-family:var(--font-mono);" />
+
+        <!-- Editable password (only when 비공개 is checked) -->
+        <input id="edit-password" type="password" autocomplete="new-password"
+          placeholder="${post.is_private ? '새 암호 (공란이면 기존 유지)' : '암호 설정'}"
+          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-8 block"
+          style="max-width:320px;font-family:var(--font-mono);display:${post.is_private ? 'block' : 'none'};" />
 
         <!-- Markdown toolbar + editor -->
         <div class="md-toolbar">${renderToolbar()}</div>
@@ -691,6 +787,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     const ta = document.getElementById('edit-content');
     if (ta) { requestAnimationFrame(() => autoResize(ta)); }
+  }
+
+  function togglePrivateInput() {
+    const checked = document.getElementById('edit-private')?.checked ?? false;
+    const pw = document.getElementById('edit-password');
+    if (pw) {
+      pw.style.display = checked ? 'block' : 'none';
+      if (!checked) pw.value = '';
+    }
   }
 
   let _previewTimer = null;
@@ -723,6 +828,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const tags = (document.getElementById('edit-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
     const draft = document.getElementById('edit-draft')?.checked ?? false;
     const cover = document.getElementById('edit-cover')?.value.trim() || '';
+    const is_private = document.getElementById('edit-private')?.checked ?? false;
+    const private_password = document.getElementById('edit-password')?.value || '';
     const content = document.getElementById('edit-content')?.value || '';
 
     if (!title || !date || !category || !content) {
@@ -731,9 +838,18 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       return;
     }
 
+    if (is_private && _isNewPost && !private_password) {
+      status.textContent = '비공개 글은 암호를 설정해야 합니다.';
+      status.style.color = '#ef4444';
+      return;
+    }
+
     btn.disabled = true; btn.textContent = '저장 중...';
     status.textContent = '';
     const token = localStorage.getItem('auth_token');
+
+    const body = { title, description, date, category, tags, draft, cover, content, is_private };
+    if (private_password) body.private_password = private_password;
 
     try {
       let res;
@@ -741,13 +857,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         res = await fetch(`${API_BASE}/api/posts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ title, description, date, category, tags, draft, cover, content }),
+          body: JSON.stringify(body),
         });
       } else {
         res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(_currentSlug)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ title, description, date, category, tags, draft, cover, content }),
+          body: JSON.stringify(body),
         });
       }
       const data = await res.json();

@@ -70,7 +70,7 @@ const pathname = Astro.url.pathname;
           <button id="auth-user-btn"
             class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors text-sm font-medium text-[var(--color-text)]"
             onclick="document.getElementById('auth-dropdown').classList.toggle('hidden')">
-            <span class="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background:linear-gradient(135deg,#0d9488,#0f766e);" id="auth-avatar">?</span>
+            <span class="w-6 h-6 rounded-full overflow-hidden flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:linear-gradient(135deg,#0d9488,#0f766e);" id="auth-avatar">?</span>
             <span id="auth-nickname" class="hidden sm:block max-w-[80px] truncate"></span>
             <svg class="w-3 h-3 text-[var(--color-text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -82,6 +82,14 @@ const pathname = Astro.url.pathname;
               <p class="text-xs font-semibold text-[var(--color-text)] truncate" id="dd-nickname"></p>
               <p class="text-xs text-[var(--color-text-secondary)] truncate" id="dd-email"></p>
             </div>
+            <a id="dd-admin-link" href="/admin" style="display:none;"
+              class="block px-3 py-2 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bg-secondary)] transition-colors">
+              관리 패널
+            </a>
+            <a id="dd-mypage" href="/mypage"
+              class="block px-3 py-2 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bg-secondary)] transition-colors">
+              마이페이지
+            </a>
             <button onclick="authLogout()"
               class="w-full text-left px-3 py-2 text-xs text-[var(--color-text-secondary)] hover:text-red-500 hover:bg-[var(--color-bg-secondary)] transition-colors">
               로그아웃
@@ -135,28 +143,28 @@ const pathname = Astro.url.pathname;
     const userMenu = document.getElementById('auth-user-menu');
 
     const writeBtn = document.getElementById('admin-write-btn');
+    const adminLink = document.getElementById('dd-admin-link');
     if (token && userRaw) {
       try {
         const user = JSON.parse(userRaw);
         loginBtn.style.display = 'none';
         userMenu.style.display = '';
-        const initials = (user.nickname || user.email || '?')[0].toUpperCase();
-        document.getElementById('auth-avatar').textContent = initials;
-        document.getElementById('auth-nickname').textContent = user.nickname || user.email.split('@')[0];
-        document.getElementById('dd-nickname').textContent = user.nickname || user.email.split('@')[0];
+        const avatarEl = document.getElementById('auth-avatar');
+        const display = user.nickname || (user.email ? user.email.split('@')[0] : '?');
+        if (user.avatar_url) {
+          avatarEl.innerHTML = `<img src="${user.avatar_url}" alt="" class="w-full h-full object-cover" onerror="this.parentNode.textContent='${(display[0]||'?').toUpperCase()}'" />`;
+        } else {
+          avatarEl.textContent = (display[0] || '?').toUpperCase();
+        }
+        document.getElementById('auth-nickname').textContent = display;
+        document.getElementById('dd-nickname').textContent = display;
         document.getElementById('dd-email').textContent = user.email;
         if (user.role === 'admin') {
           writeBtn.style.display = 'inline-flex';
-          // Add admin panel link to dropdown
-          const dropdown = document.getElementById('auth-dropdown');
-          if (dropdown && !dropdown.querySelector('#dd-admin-link')) {
-            const adminLink = document.createElement('a');
-            adminLink.id = 'dd-admin-link';
-            adminLink.href = '/admin';
-            adminLink.className = 'block px-3 py-2 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bg-secondary)] transition-colors';
-            adminLink.textContent = '관리 패널';
-            dropdown.insertBefore(adminLink, dropdown.querySelector('button'));
-          }
+          if (adminLink) adminLink.style.display = 'block';
+        } else {
+          writeBtn.style.display = 'none';
+          if (adminLink) adminLink.style.display = 'none';
         }
       } catch {
         localStorage.removeItem('auth_token');
@@ -164,11 +172,13 @@ const pathname = Astro.url.pathname;
         loginBtn.style.display = 'inline-flex';
         userMenu.style.display = 'none';
         writeBtn.style.display = 'none';
+        if (adminLink) adminLink.style.display = 'none';
       }
     } else {
       loginBtn.style.display = 'inline-flex';
       userMenu.style.display = 'none';
       writeBtn.style.display = 'none';
+      if (adminLink) adminLink.style.display = 'none';
     }
   }
 
