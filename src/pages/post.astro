@@ -172,6 +172,25 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function getViewerId() {
+    let v = localStorage.getItem('viewer_id');
+    if (!v) {
+      v = (crypto?.randomUUID && crypto.randomUUID()) ||
+          ('v_' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+      localStorage.setItem('viewer_id', v);
+    }
+    return v;
+  }
+
+  function recordPageview(slug) {
+    fetch(`${API_BASE}/api/views/${encodeURIComponent(slug)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ viewer_id: getViewerId(), referrer: document.referrer || '' }),
+      keepalive: true,
+    }).catch(() => {});
+  }
+
   function renderMarkdown(md) {
     let html = md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
@@ -547,6 +566,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
         // Load likes
         await loadLikes(slug);
+
+        // Record pageview (best-effort, deduped server-side per viewer/30min)
+        recordPageview(slug);
 
         // Show comments section and load
         const commentsSection = document.getElementById('comments-section');

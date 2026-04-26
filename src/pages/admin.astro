@@ -2,471 +2,425 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="Admin — xmin.blog" description="Blog admin panel">
-  <!-- Auth Screen -->
-  <div id="auth-screen" class="mx-auto max-w-sm px-6 py-32">
-    <div class="card">
-      <h1 class="text-xl font-bold mb-6" style="font-family: var(--font-display);">
-        Admin<span class="text-[var(--color-accent)]">.</span>
-      </h1>
-      <form id="auth-form" class="flex flex-col gap-4">
-        <input
-          id="password-input"
-          type="password"
-          placeholder="Password"
-          autocomplete="current-password"
-          class="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors font-mono text-sm"
-        />
-        <button
-          type="submit"
-          class="w-full py-2.5 rounded-lg bg-[var(--color-accent)] text-white font-medium text-sm hover:bg-[var(--color-primary-dark)] transition-colors"
-        >
-          Enter
-        </button>
-        <p id="auth-error" class="text-red-500 text-sm text-center hidden">Incorrect password.</p>
-      </form>
-    </div>
-  </div>
-
-  <!-- Admin Panel -->
-  <div id="admin-panel" class="hidden mx-auto max-w-5xl px-6 py-12">
-    <!-- Header bar -->
-    <div class="flex items-center justify-between mb-10">
-      <h1 class="text-2xl font-bold" style="font-family: var(--font-display);">
-        Admin Panel
-      </h1>
-      <div class="flex items-center gap-3">
-        <button
-          id="new-post-btn"
-          class="px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-primary-dark)] transition-colors"
-        >
-          + New Post
-        </button>
-        <button
-          id="logout-btn"
-          class="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] transition-colors"
-        >
-          Logout
-        </button>
+<BaseLayout title="Admin — xmin.blog" description="Blog analytics dashboard">
+  <div class="mx-auto max-w-6xl px-4 sm:px-5 py-10">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight" style="font-family:var(--font-display);">Analytics</h1>
+        <p class="text-xs text-[var(--color-text-secondary)] mt-1" style="font-family:var(--font-mono);">// 블로그 통계 대시보드</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/post#new"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-opacity"
+          style="background:var(--color-accent);color:white;font-family:var(--font-mono);">+ new post</a>
       </div>
     </div>
 
-    <!-- Two-column layout: editor left, post list right -->
-    <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+    <!-- Loading -->
+    <div id="adm-loading" class="text-center py-20 text-[var(--color-text-secondary)]">
+      <div class="inline-block w-6 h-6 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin mb-3"></div>
+      <p class="text-sm">통계 로딩 중...</p>
+    </div>
 
-      <!-- Editor panel -->
-      <div id="editor-panel" class="lg:col-span-3 hidden">
-        <div class="card">
-          <div class="flex items-center justify-between mb-6">
-            <h2 id="editor-title-label" class="font-semibold text-[var(--color-text)]">New Post</h2>
-            <button id="cancel-edit-btn" class="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors">
-              Cancel
-            </button>
-          </div>
+    <!-- Forbidden -->
+    <div id="adm-forbidden" class="hidden text-center py-16">
+      <p class="text-base mb-4">관리자만 접근 가능합니다.</p>
+      <a href="/login" class="inline-block px-4 py-2 rounded-md text-sm font-semibold" style="background:var(--color-accent);color:white;">로그인</a>
+    </div>
 
-          <!-- Metadata fields -->
-          <div class="flex flex-col gap-3 mb-6">
-            <input
-              id="field-title"
-              type="text"
-              placeholder="Title"
-              class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm"
-            />
-            <textarea
-              id="field-description"
-              placeholder="Description"
-              rows="2"
-              class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm resize-none"
-            ></textarea>
-            <div class="grid grid-cols-2 gap-3">
-              <input
-                id="field-date"
-                type="date"
-                class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm"
-              />
-              <input
-                id="field-category"
-                type="text"
-                placeholder="Category"
-                class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm"
-              />
-            </div>
-            <input
-              id="field-tags"
-              type="text"
-              placeholder="Tags (comma-separated)"
-              class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm"
-            />
-            <label class="flex items-center gap-2 text-sm text-[var(--color-text-secondary)] cursor-pointer select-none">
-              <input id="field-draft" type="checkbox" class="accent-[var(--color-accent)]" />
-              Save as draft
-            </label>
-          </div>
+    <!-- Dashboard -->
+    <div id="adm-content" class="hidden space-y-6">
+      <!-- Summary cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="adm-summary"></div>
 
-          <!-- Editor / Preview tabs -->
-          <div class="flex gap-1 mb-3 border-b border-[var(--color-border)]">
-            <button id="tab-editor" class="tab-btn active px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors">
-              Markdown
-            </button>
-            <button id="tab-preview" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent -mb-px text-[var(--color-text-secondary)] transition-colors">
-              Preview
-            </button>
-          </div>
+      <!-- Posts breakdown -->
+      <div class="adm-card">
+        <p class="adm-card-title">// posts</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="adm-posts-breakdown"></div>
+      </div>
 
-          <div id="md-editor-wrap">
-            <textarea
-              id="field-content"
-              placeholder="Write your post in Markdown..."
-              rows="20"
-              class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors text-sm font-mono resize-y leading-relaxed"
-            ></textarea>
-          </div>
+      <!-- 30-day views -->
+      <div class="adm-card">
+        <p class="adm-card-title">// views (last 30 days)</p>
+        <div id="adm-views-chart" class="adm-chart"></div>
+        <p id="adm-views-empty" class="hidden text-xs text-[var(--color-text-secondary)] text-center py-6">아직 페이지뷰 데이터가 없습니다.</p>
+      </div>
 
-          <div id="md-preview-wrap" class="hidden prose max-w-none min-h-48 px-2 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-secondary)]">
-          </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Top by views -->
+        <div class="adm-card">
+          <p class="adm-card-title">// top — views</p>
+          <div id="adm-top-views"></div>
+        </div>
 
-          <!-- Save -->
-          <div class="flex items-center gap-3 mt-5">
-            <button
-              id="save-btn"
-              class="px-5 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-primary-dark)] transition-colors"
-            >
-              Save Post
-            </button>
-            <span id="save-status" class="text-sm text-[var(--color-text-secondary)]"></span>
-          </div>
+        <!-- Top by likes -->
+        <div class="adm-card">
+          <p class="adm-card-title">// top — likes</p>
+          <div id="adm-top-likes"></div>
+        </div>
+
+        <!-- Top by comments -->
+        <div class="adm-card">
+          <p class="adm-card-title">// top — comments</p>
+          <div id="adm-top-comments"></div>
+        </div>
+
+        <!-- Categories -->
+        <div class="adm-card">
+          <p class="adm-card-title">// categories</p>
+          <div id="adm-categories"></div>
         </div>
       </div>
 
-      <!-- Post list panel -->
-      <div id="posts-panel" class="lg:col-span-2">
-        <div class="card">
-          <h2 class="font-semibold mb-4">Published Posts</h2>
-          <div id="posts-loading" class="text-sm text-[var(--color-text-secondary)] py-4 text-center">Loading…</div>
-          <ul id="posts-list" class="flex flex-col gap-2"></ul>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Recent comments -->
+        <div class="adm-card">
+          <p class="adm-card-title">// recent comments</p>
+          <div id="adm-recent-comments" class="space-y-2"></div>
+        </div>
+
+        <!-- Recent users -->
+        <div class="adm-card">
+          <p class="adm-card-title">// recent users</p>
+          <div id="adm-recent-users" class="space-y-2"></div>
         </div>
       </div>
-
     </div>
   </div>
 </BaseLayout>
 
 <style is:global>
-  .tab-btn.active {
-    border-bottom-color: var(--color-accent);
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .animate-spin { animation: spin 0.8s linear infinite; }
+
+  .adm-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 0.625rem;
+    padding: 1.25rem 1.4rem;
+  }
+  .adm-card-title {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-bottom: 1rem;
+    padding-bottom: 0.625rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .adm-stat {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 0.625rem;
+    padding: 0.95rem 1.1rem;
+  }
+  .adm-stat-label {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+    text-transform: lowercase;
+  }
+  .adm-stat-value {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    font-weight: 700;
     color: var(--color-text);
+    line-height: 1.1;
+    margin-top: 0.2rem;
+  }
+  .adm-stat-sub {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--color-text-secondary);
+    margin-top: 0.3rem;
+  }
+
+  .adm-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.825rem;
+  }
+  .adm-row:last-child { border-bottom: none; }
+  .adm-row-rank {
+    font-family: var(--font-mono);
+    color: var(--color-text-secondary);
+    font-size: 0.7rem;
+    width: 1.3rem;
+    flex-shrink: 0;
+  }
+  .adm-row-title {
+    flex: 1;
+    min-width: 0;
+    color: var(--color-text);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 0.15s;
+  }
+  .adm-row-title:hover { color: var(--color-accent); }
+  .adm-row-num {
+    font-family: var(--font-mono);
+    color: var(--color-accent);
+    font-weight: 600;
+    font-size: 0.78rem;
+    flex-shrink: 0;
+  }
+  .adm-row-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--color-bg-secondary);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 0 0.5rem;
+  }
+  .adm-row-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--color-accent), var(--color-accent-bright, var(--color-accent)));
+    border-radius: 3px;
+  }
+
+  .adm-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 100px;
+    padding-top: 0.5rem;
+  }
+  .adm-chart-bar {
+    flex: 1;
+    background: var(--color-accent);
+    opacity: 0.85;
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+    position: relative;
+    transition: opacity 0.15s;
+  }
+  .adm-chart-bar:hover { opacity: 1; }
+  .adm-chart-bar[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-bg-card);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .adm-comment {
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.5rem;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+  }
+  .adm-comment-meta {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+    margin-bottom: 0.35rem;
+  }
+  .adm-comment-link {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .adm-comment-link:hover { text-decoration: underline; }
+
+  .adm-empty {
+    text-align: center;
+    padding: 2rem 0;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
   }
 </style>
 
 <script is:inline>
-// ─── Config ────────────────────────────────────────────────────────────────
-// Replace this with the SHA-256 hash of your chosen password.
-// Generate: https://emn178.github.io/online-tools/sha256.html
-// Default placeholder hash (password: "changeme") — CHANGE BEFORE DEPLOYING
-const PASSWORD_HASH = '12bc9969f1043b58d204928c56edb62dfbfbe1b68674af046d52d7934c5ca1f5';
+  const API_BASE = 'https://api.xmin.blog';
 
-const API_BASE = 'https://api.xmin.blog';
-
-// ─── Auth ───────────────────────────────────────────────────────────────────
-async function sha256(text) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-const authScreen = document.getElementById('auth-screen');
-const adminPanel = document.getElementById('admin-panel');
-
-// Auto-login via JWT if admin is already logged in
-(function() {
-  try {
-    const token = localStorage.getItem('auth_token');
-    const user = JSON.parse(localStorage.getItem('auth_user') || '{}');
-    if (token && user.role === 'admin') {
-      sessionStorage.setItem('admin_auth', 'true');
-      sessionStorage.setItem('admin_jwt', token);
-    }
-  } catch {}
-})();
-
-function isAuthenticated() {
-  return sessionStorage.getItem('admin_auth') === 'true';
-}
-
-if (isAuthenticated()) {
-  authScreen.classList.add('hidden');
-  adminPanel.classList.remove('hidden');
-  loadPosts();
-  // Handle ?edit=slug URL param
-  const editSlug = new URLSearchParams(window.location.search).get('edit');
-  if (editSlug) fetchAndEdit(editSlug);
-}
-
-document.getElementById('auth-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const pw = document.getElementById('password-input').value;
-  const hash = await sha256(pw);
-  if (hash === PASSWORD_HASH) {
-    sessionStorage.setItem('admin_auth', 'true');
-    authScreen.classList.add('hidden');
-    adminPanel.classList.remove('hidden');
-    loadPosts();
-  } else {
-    document.getElementById('auth-error').classList.remove('hidden');
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
-});
 
-document.getElementById('logout-btn').addEventListener('click', () => {
-  sessionStorage.removeItem('admin_auth');
-  sessionStorage.removeItem('admin_jwt');
-  sessionStorage.removeItem('admin_pw');
-  location.reload();
-});
+  function fmtNum(n) {
+    return Number(n || 0).toLocaleString('ko-KR');
+  }
 
-// ─── Editor state ───────────────────────────────────────────────────────────
-let editingSlug = null; // null = new post
-
-function openEditor(post = null) {
-  editingSlug = post ? post.slug : null;
-  document.getElementById('editor-title-label').textContent = post ? 'Edit Post' : 'New Post';
-  document.getElementById('field-title').value = post?.title ?? '';
-  document.getElementById('field-description').value = post?.description ?? '';
-  document.getElementById('field-date').value = post?.date ?? new Date().toISOString().slice(0, 10);
-  document.getElementById('field-category').value = post?.category ?? '';
-  document.getElementById('field-tags').value = post?.tags?.join(', ') ?? '';
-  document.getElementById('field-draft').checked = post?.draft ?? false;
-  document.getElementById('field-content').value = post?.content ?? '';
-  document.getElementById('save-status').textContent = '';
-  showTab('editor');
-  document.getElementById('editor-panel').classList.remove('hidden');
-  // On mobile, scroll to editor
-  document.getElementById('editor-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function closeEditor() {
-  editingSlug = null;
-  document.getElementById('editor-panel').classList.add('hidden');
-}
-
-document.getElementById('new-post-btn').addEventListener('click', () => openEditor());
-document.getElementById('cancel-edit-btn').addEventListener('click', closeEditor);
-
-// ─── Tabs ───────────────────────────────────────────────────────────────────
-function showTab(tab) {
-  const isEditor = tab === 'editor';
-  document.getElementById('md-editor-wrap').classList.toggle('hidden', !isEditor);
-  document.getElementById('md-preview-wrap').classList.toggle('hidden', isEditor);
-  document.getElementById('tab-editor').classList.toggle('active', isEditor);
-  document.getElementById('tab-preview').classList.toggle('active', !isEditor);
-  if (!isEditor) renderPreview();
-}
-
-document.getElementById('tab-editor').addEventListener('click', () => showTab('editor'));
-document.getElementById('tab-preview').addEventListener('click', () => showTab('preview'));
-
-// ─── Markdown preview (simple renderer) ─────────────────────────────────────
-function renderPreview() {
-  const md = document.getElementById('field-content').value;
-  document.getElementById('md-preview-wrap').innerHTML = simpleMarkdown(md);
-}
-
-function simpleMarkdown(md) {
-  return md
-    // Escape HTML
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    // Code blocks
-    .replace(/```[\w]*\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-    // Inline code
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    // Headings
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    // Bold / italic
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    // Blockquote
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    // HR
-    .replace(/^---$/gm, '<hr>')
-    // Unordered list items
-    .replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>')
-    // Ordered list items
-    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-    // Paragraphs (double newline)
-    .split(/\n{2,}/).map(block => {
-      if (/^<(h[1-6]|pre|blockquote|hr|ul|ol|li)/.test(block.trim())) return block;
-      if (block.trim() === '') return '';
-      // Wrap li items in ul
-      if (block.includes('<li>')) return '<ul>' + block.trim() + '</ul>';
-      return '<p>' + block.replace(/\n/g, '<br>') + '</p>';
-    }).join('\n');
-}
-
-// ─── Posts list ─────────────────────────────────────────────────────────────
-async function loadPosts() {
-  const loading = document.getElementById('posts-loading');
-  const list = document.getElementById('posts-list');
-  loading.textContent = 'Loading…';
-  list.innerHTML = '';
-
-  try {
-    const res = await fetch(`${API_BASE}/api/posts`, {
-      headers: { 'X-Admin-Password': sessionStorage.getItem('admin_pw') ?? '' },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const posts = await res.json();
-    loading.classList.add('hidden');
-    if (!posts.length) {
-      list.innerHTML = '<li class="text-sm text-[var(--color-text-secondary)] py-2">No posts yet.</li>';
+  async function admInit() {
+    const token = localStorage.getItem('auth_token');
+    let user = null;
+    try { user = JSON.parse(localStorage.getItem('auth_user') || 'null'); } catch {}
+    if (!token || !user || user.role !== 'admin') {
+      document.getElementById('adm-loading').classList.add('hidden');
+      document.getElementById('adm-forbidden').classList.remove('hidden');
       return;
     }
-    posts.forEach(post => {
-      const li = document.createElement('li');
-      li.className = 'flex items-start justify-between gap-3 py-2 border-b border-[var(--color-border)] last:border-0';
-      li.innerHTML = `
-        <div class="min-w-0">
-          <p class="text-sm font-medium truncate text-[var(--color-text)]">${escHtml(post.title)}</p>
-          <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">${post.date} · ${escHtml(post.category)}</p>
-        </div>
-        <div class="flex gap-2 shrink-0">
-          <button data-slug="${escHtml(post.slug)}" class="edit-btn text-xs text-[var(--color-accent)] hover:underline">Edit</button>
-          <button data-slug="${escHtml(post.slug)}" class="del-btn text-xs text-red-500 hover:underline">Del</button>
-        </div>
-      `;
-      list.appendChild(li);
-    });
-
-    list.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', () => fetchAndEdit(btn.dataset.slug));
-    });
-    list.querySelectorAll('.del-btn').forEach(btn => {
-      btn.addEventListener('click', () => deletePost(btn.dataset.slug));
-    });
-  } catch (err) {
-    loading.textContent = 'Failed to load posts. Check API URL and CORS.';
-    console.error(err);
-  }
-}
-
-async function fetchAndEdit(slug) {
-  const status = document.getElementById('save-status');
-  status.textContent = '';
-  try {
-    const res = await fetch(`${API_BASE}/api/posts/${slug}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const post = await res.json();
-    openEditor({ ...post, slug });
-  } catch (err) {
-    alert('Failed to fetch post: ' + err.message);
-  }
-}
-
-async function deletePost(slug) {
-  if (!confirm(`Delete "${slug}"?`)) return;
-  const status = document.getElementById('save-status');
-  try {
-    const res = await fetch(`${API_BASE}/api/posts/${slug}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ password: getPasswordForApi() }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-    if (editingSlug === slug) closeEditor();
-    await loadPosts();
-  } catch (err) {
-    alert('Delete failed: ' + err.message);
-  }
-}
-
-// ─── Save ────────────────────────────────────────────────────────────────────
-document.getElementById('save-btn').addEventListener('click', async () => {
-  const status = document.getElementById('save-status');
-  const title = document.getElementById('field-title').value.trim();
-  const description = document.getElementById('field-description').value.trim();
-  const date = document.getElementById('field-date').value;
-  const category = document.getElementById('field-category').value.trim();
-  const tags = document.getElementById('field-tags').value.split(',').map(t => t.trim()).filter(Boolean);
-  const draft = document.getElementById('field-draft').checked;
-  const content = document.getElementById('field-content').value;
-
-  if (!title || !date || !category || !content) {
-    status.textContent = 'Title, date, category and content are required.';
-    status.style.color = 'var(--color-accent)';
-    return;
-  }
-
-  status.textContent = 'Saving…';
-  status.style.color = 'var(--color-text-secondary)';
-
-  const payload = {
-    title, description, date, category, tags, draft, content,
-    password: getPasswordForApi(),
-  };
-
-  try {
-    let res;
-    if (editingSlug) {
-      res = await fetch(`${API_BASE}/api/posts/${editingSlug}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/stats`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-    } else {
-      res = await fetch(`${API_BASE}/api/posts`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
+      if (res.status === 403 || res.status === 401) {
+        document.getElementById('adm-loading').classList.add('hidden');
+        document.getElementById('adm-forbidden').classList.remove('hidden');
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const stats = await res.json();
+      document.getElementById('adm-loading').classList.add('hidden');
+      document.getElementById('adm-content').classList.remove('hidden');
+      render(stats);
+    } catch (err) {
+      document.getElementById('adm-loading').innerHTML = `<p class="text-sm" style="color:#ef4444;">로딩 실패: ${esc(err.message)}</p>`;
     }
+  }
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+  function render(stats) {
+    renderSummary(stats.summary);
+    renderPostsBreakdown(stats.summary);
+    renderViewsChart(stats.views_by_day || []);
+    renderTopList('adm-top-views', stats.top_by_views, 'views');
+    renderTopList('adm-top-likes', stats.top_by_likes, 'likes');
+    renderTopList('adm-top-comments', stats.top_by_comments, 'comments');
+    renderCategories(stats.categories || []);
+    renderRecentComments(stats.recent_comments || []);
+    renderRecentUsers(stats.recent_users || []);
+  }
 
-    status.textContent = 'Saved!';
-    status.style.color = '#10b981';
-    if (!editingSlug) {
-      editingSlug = data.slug;
-      document.getElementById('editor-title-label').textContent = 'Edit Post';
+  function renderSummary(s) {
+    const el = document.getElementById('adm-summary');
+    el.innerHTML = [
+      ['views',    s.total_views,    `${fmtNum(s.published_posts)} published`],
+      ['likes',    s.total_likes,    `${fmtNum(s.total_users)} users`],
+      ['comments', s.total_comments, ''],
+      ['posts',    s.total_posts,    `${fmtNum(s.private_posts)} private · ${fmtNum(s.draft_posts)} draft`],
+    ].map(([label, val, sub]) => `
+      <div class="adm-stat">
+        <p class="adm-stat-label">// ${esc(label)}</p>
+        <p class="adm-stat-value">${fmtNum(val)}</p>
+        ${sub ? `<p class="adm-stat-sub">${esc(sub)}</p>` : ''}
+      </div>
+    `).join('');
+  }
+
+  function renderPostsBreakdown(s) {
+    const el = document.getElementById('adm-posts-breakdown');
+    el.innerHTML = [
+      ['total',     s.total_posts],
+      ['published', s.published_posts],
+      ['drafts',    s.draft_posts],
+      ['private',   s.private_posts],
+    ].map(([label, val]) => `
+      <div>
+        <p class="adm-stat-label">// ${esc(label)}</p>
+        <p class="adm-stat-value" style="font-size:1.3rem;">${fmtNum(val)}</p>
+      </div>
+    `).join('');
+  }
+
+  function renderViewsChart(byDay) {
+    const el = document.getElementById('adm-views-chart');
+    const empty = document.getElementById('adm-views-empty');
+    // Build last-30-day window
+    const days = [];
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      days.push(key);
     }
-    await loadPosts();
-  } catch (err) {
-    status.textContent = 'Error: ' + err.message;
-    status.style.color = '#ef4444';
+    const lookup = Object.fromEntries(byDay.map(r => [r.day, r.views]));
+    const max = Math.max(1, ...days.map(d => lookup[d] || 0));
+    if (max === 1 && byDay.length === 0) {
+      el.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    el.innerHTML = days.map(d => {
+      const v = lookup[d] || 0;
+      const h = (v / max) * 100;
+      return `<div class="adm-chart-bar" style="height:${h}%;" data-tip="${d}: ${v}"></div>`;
+    }).join('');
   }
-});
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function escHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// Also capture raw password in sessionStorage for API calls.
-// The worker independently hashes and verifies it server-side.
-document.getElementById('auth-form').addEventListener('submit', async function capture() {
-  const pw = document.getElementById('password-input').value;
-  const hash = await sha256(pw);
-  if (hash === PASSWORD_HASH) {
-    sessionStorage.setItem('admin_pw', pw);
+  function renderTopList(elId, rows, key) {
+    const el = document.getElementById(elId);
+    if (!rows || !rows.length) { el.innerHTML = '<p class="adm-empty">아직 데이터 없음</p>'; return; }
+    const max = Math.max(...rows.map(r => Number(r[key] || 0)));
+    el.innerHTML = rows.map((r, i) => {
+      const v = Number(r[key] || 0);
+      const pct = max > 0 ? (v / max) * 100 : 0;
+      return `<div class="adm-row">
+        <span class="adm-row-rank">${i + 1}.</span>
+        <a href="/post#${esc(r.post_slug)}" class="adm-row-title" title="${esc(r.title)}">${esc(r.title)}</a>
+        <span class="adm-row-bar-wrap"><span class="adm-row-bar" style="width:${pct}%"></span></span>
+        <span class="adm-row-num">${fmtNum(v)}</span>
+      </div>`;
+    }).join('');
   }
-});
 
-// If authenticated via password but pw lost on reload — only prompt if no JWT available
-if (isAuthenticated() && !sessionStorage.getItem('admin_pw') && !sessionStorage.getItem('admin_jwt') && !localStorage.getItem('auth_token')) {
-  const pw = prompt('Re-enter admin password for API access:');
-  if (pw) sessionStorage.setItem('admin_pw', pw);
-}
+  function renderCategories(rows) {
+    const el = document.getElementById('adm-categories');
+    if (!rows.length) { el.innerHTML = '<p class="adm-empty">카테고리 없음</p>'; return; }
+    const max = Math.max(...rows.map(r => Number(r.count || 0)));
+    el.innerHTML = rows.map(r => {
+      const v = Number(r.count || 0);
+      const pct = (v / max) * 100;
+      return `<div class="adm-row">
+        <a href="/?category=${encodeURIComponent(r.category)}" class="adm-row-title">[${esc(r.category)}]</a>
+        <span class="adm-row-bar-wrap"><span class="adm-row-bar" style="width:${pct}%"></span></span>
+        <span class="adm-row-num">${fmtNum(v)}</span>
+      </div>`;
+    }).join('');
+  }
 
-function getPasswordForApi() {
-  return sessionStorage.getItem('admin_pw') ?? '';
-}
+  function renderRecentComments(rows) {
+    const el = document.getElementById('adm-recent-comments');
+    if (!rows.length) { el.innerHTML = '<p class="adm-empty">댓글 없음</p>'; return; }
+    el.innerHTML = rows.map(c => {
+      const date = new Date(Number(c.created_at) * 1000).toLocaleString('ko-KR');
+      const preview = (c.content || '').slice(0, 80);
+      return `<div class="adm-comment">
+        <div class="adm-comment-meta">
+          <strong style="color:var(--color-text);">${esc(c.nickname || '익명')}</strong>
+          on <a class="adm-comment-link" href="/post#${esc(c.post_slug)}">${esc(c.post_slug)}</a>
+          · ${esc(date)}
+        </div>
+        <p class="text-sm" style="color:var(--color-text);line-height:1.5;">${esc(preview)}${c.content && c.content.length > 80 ? '…' : ''}</p>
+      </div>`;
+    }).join('');
+  }
 
-function getAuthHeaders() {
-  const jwt = sessionStorage.getItem('admin_jwt') || localStorage.getItem('auth_token');
-  const base = { 'Content-Type': 'application/json' };
-  return jwt ? { ...base, Authorization: `Bearer ${jwt}` } : base;
-}
+  function renderRecentUsers(rows) {
+    const el = document.getElementById('adm-recent-users');
+    if (!rows.length) { el.innerHTML = '<p class="adm-empty">사용자 없음</p>'; return; }
+    el.innerHTML = rows.map(u => {
+      const date = new Date(Number(u.created_at) * 1000).toLocaleDateString('ko-KR');
+      const roleBadge = u.role === 'admin'
+        ? '<span style="color:var(--color-accent);font-family:var(--font-mono);font-size:0.65rem;">[admin]</span>'
+        : '<span style="color:var(--color-text-secondary);font-family:var(--font-mono);font-size:0.65rem;">[user]</span>';
+      return `<div class="adm-comment">
+        <div class="adm-comment-meta">
+          <strong style="color:var(--color-text);">${esc(u.nickname || '?')}</strong>
+          ${roleBadge} · ${esc(date)}
+        </div>
+        <p class="text-xs" style="color:var(--color-text-secondary);font-family:var(--font-mono);">${esc(u.email)}</p>
+      </div>`;
+    }).join('');
+  }
+
+  admInit();
 </script>
-</BaseLayout>
