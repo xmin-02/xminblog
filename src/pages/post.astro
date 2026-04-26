@@ -1019,7 +1019,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     `;
 
     const mount = document.getElementById('rich-editor');
-    if (mount && window.createBlogEditor) {
+    if (!mount) return;
+    mount.innerHTML = '<p class="text-xs" style="color:var(--color-text-secondary);">에디터 로딩 중...</p>';
+    waitForEditor().then(ok => {
+      if (!ok || !window.createBlogEditor) {
+        mount.innerHTML = '<p class="text-sm" style="color:#ef4444;">에디터 로드 실패 — 새로고침 후 다시 시도</p>';
+        return;
+      }
+      mount.innerHTML = '';
       _editor?.destroy?.();
       _editor = window.createBlogEditor({
         element: mount,
@@ -1027,9 +1034,18 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         apiBase: API_BASE,
         getAuthToken: () => localStorage.getItem('auth_token'),
       });
-    } else if (mount) {
-      mount.innerHTML = '<p class="text-sm" style="color:#ef4444;">에디터 로드 실패 — 새로고침 후 다시 시도</p>';
-    }
+    });
+  }
+
+  function waitForEditor(maxWaitMs = 8000) {
+    return new Promise(resolve => {
+      const start = Date.now();
+      (function check() {
+        if (window.createBlogEditor) return resolve(true);
+        if (Date.now() - start > maxWaitMs) return resolve(false);
+        setTimeout(check, 60);
+      })();
+    });
   }
 
   let _editor = null;
