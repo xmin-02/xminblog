@@ -254,10 +254,77 @@ function createSlashExtension(uploadImage: () => void) {
   });
 }
 
+// ── Table toolbar ───────────────────────────────────────────────────────────
+
+function createTableToolbar(editor: Editor): HTMLDivElement {
+  const bar = document.createElement('div');
+  bar.className = 'tt-table-toolbar';
+  bar.style.display = 'none';
+
+  const sep = () => {
+    const s = document.createElement('span');
+    s.className = 'tt-tb-sep';
+    return s;
+  };
+  const btn = (label: string, title: string, cmd: () => void) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tt-tb-btn';
+    b.title = title;
+    b.textContent = label;
+    b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd(); });
+    return b;
+  };
+
+  bar.append(
+    btn('+행↑', '위 행 추가', () => editor.chain().focus().addRowBefore().run()),
+    btn('+행↓', '아래 행 추가', () => editor.chain().focus().addRowAfter().run()),
+    btn('+열←', '왼쪽 열 추가', () => editor.chain().focus().addColumnBefore().run()),
+    btn('+열→', '오른쪽 열 추가', () => editor.chain().focus().addColumnAfter().run()),
+    sep(),
+    btn('−행', '행 삭제', () => editor.chain().focus().deleteRow().run()),
+    btn('−열', '열 삭제', () => editor.chain().focus().deleteColumn().run()),
+    sep(),
+    btn('병합', '선택 셀 병합', () => editor.chain().focus().mergeCells().run()),
+    btn('분할', '셀 분할', () => editor.chain().focus().splitCell().run()),
+    sep(),
+    btn('헤더행', '헤더 행 토글', () => editor.chain().focus().toggleHeaderRow().run()),
+    btn('헤더열', '헤더 열 토글', () => editor.chain().focus().toggleHeaderColumn().run()),
+    sep(),
+    btn('표 삭제', '표 전체 삭제', () => editor.chain().focus().deleteTable().run()),
+  );
+  return bar;
+}
+
+// ── Auto-scroll keep cursor visible ─────────────────────────────────────────
+
+function ensureCursorVisible(editor: Editor) {
+  try {
+    const { from } = editor.state.selection;
+    const coords = editor.view.coordsAtPos(from);
+    const winH = window.innerHeight;
+    const headerH = 64;
+    const padBottom = 120;
+    if (coords.bottom > winH - padBottom) {
+      const delta = coords.bottom - (winH - padBottom);
+      window.scrollBy({ top: delta, behavior: 'smooth' });
+    } else if (coords.top < headerH + 20) {
+      const delta = (headerH + 20) - coords.top;
+      window.scrollBy({ top: -delta, behavior: 'smooth' });
+    }
+  } catch {}
+}
+
 // ── Editor factory ──────────────────────────────────────────────────────────
 
 export function createBlogEditor(opts: BlogEditorOptions): BlogEditorHandle {
   const { element, initialMarkdown = '', apiBase, getAuthToken, onChange } = opts;
+
+  // Wrapper structure: toolbar (sticky) on top, ProseMirror mount below
+  element.innerHTML = '';
+  const editorMount = document.createElement('div');
+  editorMount.className = 'tt-editor-mount';
+  element.appendChild(editorMount);
 
   async function uploadFile(file: File): Promise<string | null> {
     const fd = new FormData();
@@ -292,7 +359,7 @@ export function createBlogEditor(opts: BlogEditorOptions): BlogEditorHandle {
   }
 
   const editor = new Editor({
-    element,
+    element: editorMount,
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4] },
@@ -347,8 +414,23 @@ export function createBlogEditor(opts: BlogEditorOptions): BlogEditorHandle {
     },
     onUpdate: ({ editor }) => {
       onChange?.(htmlToMd(editor.getHTML()));
+      ensureCursorVisible(editor);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      ensureCursorVisible(editor);
     },
   });
+
+  // Mount table toolbar at top of wrapper, show/hide based on cursor
+  const toolbar = createTableToolbar(editor);
+  element.insertBefore(toolbar, editorMount);
+  const refreshToolbar = () => {
+    toolbar.style.display = editor.isActive('table') ? 'flex' : 'none';
+  };
+  editor.on('selectionUpdate', refreshToolbar);
+  editor.on('update', refreshToolbar);
+  editor.on('focus', refreshToolbar);
+  refreshToolbar();
 
   return {
     editor,

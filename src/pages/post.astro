@@ -193,7 +193,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   /* ── Tiptap rich editor ── */
   .rich-editor {
     min-height: 360px;
-    padding: 1rem 1.25rem;
     border: 1px solid var(--color-border);
     border-radius: 0.625rem;
     background: var(--color-bg-secondary);
@@ -201,8 +200,49 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     font-size: 1.0125rem;
     line-height: 1.85;
     transition: border-color 0.15s;
+    overflow: visible;
   }
   .rich-editor:focus-within { border-color: var(--color-accent); }
+  .tt-editor-mount { padding: 1rem 1.25rem; }
+
+  /* Table toolbar — sticky just below page header */
+  .tt-table-toolbar {
+    position: sticky;
+    top: 56px;
+    z-index: 25;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--color-bg-card);
+    border-bottom: 1px solid var(--color-border);
+    border-radius: 0.625rem 0.625rem 0 0;
+    backdrop-filter: blur(8px);
+  }
+  .tt-tb-btn {
+    padding: 0.3rem 0.55rem;
+    border-radius: 0.35rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+    line-height: 1.2;
+  }
+  .tt-tb-btn:hover {
+    background: rgba(34,211,238,0.12);
+    color: var(--color-accent);
+    border-color: rgba(34,211,238,0.3);
+  }
+  .tt-tb-sep {
+    width: 1px; height: 1.1rem;
+    background: var(--color-border);
+    margin: 0 0.25rem;
+  }
+
   .tiptap-editor-content { outline: none; min-height: 300px; }
   .tiptap-editor-content:focus { outline: none; }
   .tiptap-editor-content p { margin-bottom: 1.1em; }
