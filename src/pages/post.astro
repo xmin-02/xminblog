@@ -227,30 +227,62 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   function renderMarkdown(md) {
     let html = md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    // Code blocks first so their content is preserved verbatim
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
-      `<pre><code class="language-${lang || 'text'}">${code.trimEnd()}</code></pre>`);
+      `\n\n<pre><code class="language-${lang || 'text'}">${code.trimEnd()}</code></pre>\n\n`);
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Inline media/links
     html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />');
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    // Headings — wrap with blank lines so each becomes its own block
+    html = html.replace(/^#### (.+)$/gm, '\n\n<h4>$1</h4>\n\n');
+    html = html.replace(/^### (.+)$/gm, '\n\n<h3>$1</h3>\n\n');
+    html = html.replace(/^## (.+)$/gm, '\n\n<h2>$1</h2>\n\n');
+    html = html.replace(/^# (.+)$/gm, '\n\n<h1>$1</h1>\n\n');
+
+    // Inline emphasis
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-    html = html.replace(/^---$/gm, '<hr>');
+
+    // Blockquote / hr — also block-level
+    html = html.replace(/^&gt; (.+)$/gm, '\n\n<blockquote>$1</blockquote>\n\n');
+    html = html.replace(/^---$/gm, '\n\n<hr>\n\n');
+
     return html.split(/\n{2,}/).map(block => {
       const t = block.trim();
       if (!t) return '';
       if (/^<(h[1-6]|pre|blockquote|hr|img)/.test(t)) return t;
-      const listLines = t.split('\n');
-      if (listLines.every(l => /^[-*] /.test(l) || !l.trim())) {
-        return '<ul>' + listLines.map(l => { const m = l.match(/^[-*] (.+)/); return m ? `<li>${m[1]}</li>` : ''; }).join('') + '</ul>';
+
+      const lines = t.split('\n');
+
+      // GFM table: header row + |---|---| separator + body rows
+      if (lines.length >= 2 && lines[0].trim().startsWith('|') && /^\s*\|?[\s|:\-]+\|[\s|:\-]*$/.test(lines[1].trim())) {
+        const rows = lines.filter(l => l.trim().startsWith('|'));
+        const splitRow = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        const header = splitRow(rows[0]);
+        const body = rows.slice(2).map(splitRow);
+        let out = '<table><thead><tr>';
+        for (const h of header) out += `<th>${h}</th>`;
+        out += '</tr></thead><tbody>';
+        for (const cells of body) {
+          out += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>';
+        }
+        out += '</tbody></table>';
+        return out;
       }
-      if (listLines.every(l => /^\d+\. /.test(l) || !l.trim())) {
-        return '<ol>' + listLines.map(l => { const m = l.match(/^\d+\. (.+)/); return m ? `<li>${m[1]}</li>` : ''; }).join('') + '</ol>';
+
+      // Unordered list
+      if (lines.every(l => /^[-*] /.test(l) || !l.trim())) {
+        return '<ul>' + lines.map(l => { const m = l.match(/^[-*] (.+)/); return m ? `<li>${m[1]}</li>` : ''; }).join('') + '</ul>';
       }
+      // Ordered list
+      if (lines.every(l => /^\d+\. /.test(l) || !l.trim())) {
+        return '<ol>' + lines.map(l => { const m = l.match(/^\d+\. (.+)/); return m ? `<li>${m[1]}</li>` : ''; }).join('') + '</ol>';
+      }
+
       return '<p>' + t.replace(/\n/g, '<br>') + '</p>';
     }).join('\n');
   }
