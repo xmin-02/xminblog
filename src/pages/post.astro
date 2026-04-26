@@ -122,6 +122,40 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     outline-offset: 3px;
   }
   [contenteditable="true"]:focus { outline-color: var(--color-accent); }
+  [contenteditable="true"][data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-text-secondary);
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .edit-field-label {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+    margin-bottom: 0.35rem;
+    display: block;
+  }
+  .edit-field-label::before {
+    content: '// ';
+    color: var(--color-accent);
+    opacity: 0.7;
+  }
+  .edit-required {
+    color: #ef4444;
+    margin-left: 0.2rem;
+  }
+  .edit-help-banner {
+    background: rgba(34,211,238,0.06);
+    border: 1px solid rgba(34,211,238,0.2);
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.85rem;
+    margin-bottom: 1.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+  }
+  .edit-help-banner b { color: var(--color-text); font-weight: 600; }
   .md-toolbar {
     display: flex; flex-wrap: wrap; gap: 0.125rem;
     padding: 0.375rem 0.5rem;
@@ -757,46 +791,69 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           </div>
         </div>
 
-        <!-- Editable meta row -->
-        <div class="flex flex-wrap items-center gap-2 mb-4">
-          <input id="edit-category" type="text" value="${esc(post.category || '')}" placeholder="카테고리"
-            class="text-xs font-semibold px-3 py-1 rounded-full outline-none transition-all"
-            style="background:rgba(34,211,238,0.1);color:var(--color-accent);border:1.5px dashed rgba(34,211,238,0.4);min-width:60px;max-width:120px;" />
-          <input id="edit-date" type="date" value="${dateVal}"
-            class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)]" />
+        <!-- Help banner -->
+        <div class="edit-help-banner">
+          <b>필수</b>: 제목 <span class="edit-required">*</span> · 설명 · 카테고리 <span class="edit-required">*</span> · 날짜 <span class="edit-required">*</span> · 본문 <span class="edit-required">*</span>
+          &nbsp;|&nbsp; <b>선택</b>: 태그 · 대표이미지 · 비공개 암호
         </div>
 
-        <!-- Editable title -->
+        <!-- Category + date row (required) -->
+        <div class="grid grid-cols-2 gap-4 mb-5" style="max-width:520px;">
+          <div>
+            <label class="edit-field-label" for="edit-category">카테고리<span class="edit-required">*</span></label>
+            <input id="edit-category" type="text" value="${esc(post.category || '')}" placeholder="예: Linux, AI, 보안"
+              class="text-xs font-semibold px-3 py-1.5 rounded-full outline-none transition-all w-full"
+              style="background:rgba(34,211,238,0.1);color:var(--color-accent);border:1.5px dashed rgba(34,211,238,0.4);" />
+          </div>
+          <div>
+            <label class="edit-field-label" for="edit-date">날짜<span class="edit-required">*</span></label>
+            <input id="edit-date" type="date" value="${dateVal}"
+              class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-2 py-1.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full" />
+          </div>
+        </div>
+
+        <!-- Title (required) -->
+        <label class="edit-field-label">제목<span class="edit-required">*</span></label>
         <h1 id="edit-title" contenteditable="true" spellcheck="false"
-          class="text-2xl sm:text-3xl font-bold leading-snug mb-4 tracking-tight"
+          data-placeholder="여기에 제목을 입력하세요"
+          class="text-2xl sm:text-3xl font-bold leading-snug mb-5 tracking-tight"
           style="font-family:var(--font-display);color:var(--color-text);"
         >${esc(post.title || '')}</h1>
 
-        <!-- Editable description -->
+        <!-- Description -->
+        <label class="edit-field-label">설명 <span class="text-[var(--color-text-secondary)]" style="opacity:0.7;">(목록·OG 미리보기에 표시)</span></label>
         <p id="edit-desc" contenteditable="true" spellcheck="false"
-          class="text-base leading-relaxed mb-4"
-          style="color:var(--color-text-secondary);"
+          data-placeholder="이 글의 한두 줄 요약"
+          class="text-base leading-relaxed mb-5"
+          style="color:var(--color-text-secondary);min-height:1.5rem;"
         >${esc(post.description || '')}</p>
 
-        <!-- Editable tags -->
-        <input id="edit-tags" type="text" value="${esc(tagsStr)}" placeholder="태그 (쉼표로 구분)"
-          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-3"
-          style="max-width:320px;" />
+        <!-- Tags (optional) -->
+        <label class="edit-field-label">태그 <span style="opacity:0.7;">(쉼표 구분, 선택)</span></label>
+        <input id="edit-tags" type="text" value="${esc(tagsStr)}" placeholder="예: linux, kernel, fuzzing"
+          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-2 py-1.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-4"
+          style="max-width:480px;" />
 
-        <!-- Editable cover image URL -->
-        <input id="edit-cover" type="url" value="${esc(post.cover || '')}" placeholder="대표 이미지 URL (선택)"
-          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-3 block"
+        <!-- Cover image URL (optional) -->
+        <label class="edit-field-label">대표 이미지 URL <span style="opacity:0.7;">(선택, 목록·상세 상단 배너)</span></label>
+        <input id="edit-cover" type="url" value="${esc(post.cover || '')}" placeholder="https://..."
+          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-2 py-1.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-4 block"
           style="max-width:480px;font-family:var(--font-mono);" />
 
-        <!-- Editable password (only when 비공개 is checked) -->
-        <input id="edit-password" type="password" autocomplete="new-password"
-          placeholder="${post.is_private ? '새 암호 (공란이면 기존 유지)' : '암호 설정'}"
-          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-1 py-0.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-8 block"
-          style="max-width:320px;font-family:var(--font-mono);display:${post.is_private ? 'block' : 'none'};" />
+        <!-- Private password (conditional) -->
+        <div id="edit-password-wrap" style="display:${post.is_private ? 'block' : 'none'};">
+          <label class="edit-field-label">비공개 암호 <span style="opacity:0.7;">(상단 '비공개' 체크 시 필수, 신규 글)</span></label>
+          <input id="edit-password" type="password" autocomplete="new-password"
+            placeholder="${post.is_private && !_isNewPost ? '공란이면 기존 암호 유지' : '비공개 글 열람용 암호'}"
+            class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-2 py-1.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-6 block"
+            style="max-width:320px;font-family:var(--font-mono);" />
+        </div>
 
-        <!-- Markdown toolbar + editor -->
+        <!-- Body (required) -->
+        <label class="edit-field-label" style="margin-top:0.5rem;">본문<span class="edit-required">*</span> <span style="opacity:0.7;">(Markdown)</span></label>
         <div class="md-toolbar">${renderToolbar()}</div>
         <textarea id="edit-content" class="edit-body-textarea" spellcheck="false"
+          placeholder="# 제목&#10;&#10;본문을 Markdown으로 작성하세요.&#10;&#10;- 목록&#10;- 항목&#10;&#10;\`\`\`bash&#10;코드 블록&#10;\`\`\`"
           oninput="schedulePreview();autoResize(this)">${esc(post.content || '')}</textarea>
 
         <!-- Preview divider -->
@@ -813,11 +870,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   function togglePrivateInput() {
     const checked = document.getElementById('edit-private')?.checked ?? false;
+    const wrap = document.getElementById('edit-password-wrap');
     const pw = document.getElementById('edit-password');
-    if (pw) {
-      pw.style.display = checked ? 'block' : 'none';
-      if (!checked) pw.value = '';
-    }
+    if (wrap) wrap.style.display = checked ? 'block' : 'none';
+    if (pw && !checked) pw.value = '';
   }
 
   let _previewTimer = null;
