@@ -116,8 +116,9 @@ async function verifyAdminPassword(provided: string, env: Env): Promise<boolean>
 
 // ─── JWT helpers ──────────────────────────────────────────────────────────────
 
-function b64url(buf: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+function b64url(buf: ArrayBuffer | Uint8Array): string {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
@@ -238,20 +239,25 @@ interface PostMeta {
   title: string; description: string; date: string;
   category: string; tags: string[]; draft: boolean;
   cover?: string;
+  is_private?: boolean;
+  password_hash?: string;
 }
-interface PostPayload extends PostMeta { content: string; password: string; }
+interface PostPayload extends PostMeta { content: string; password: string; private_password?: string; }
 
 function buildMarkdown(meta: PostMeta, body: string): string {
   const tags = meta.tags.length
     ? `\ntags: [${meta.tags.map(t => `"${t}"`).join(', ')}]`
     : '\ntags: []';
   const cover = meta.cover ? `\ncover: "${meta.cover.replace(/"/g, '\\"')}"` : '';
+  const privateFields = meta.is_private
+    ? `\nis_private: true${meta.password_hash ? `\npassword_hash: "${meta.password_hash.replace(/"/g, '\\"')}"` : ''}`
+    : '';
   return `---
 title: "${meta.title.replace(/"/g, '\\"')}"
 description: "${meta.description.replace(/"/g, '\\"')}"
 date: ${meta.date}
 category: "${meta.category.replace(/"/g, '\\"')}"${tags}
-draft: ${meta.draft}${cover}
+draft: ${meta.draft}${cover}${privateFields}
 ---
 
 ${body.trimStart()}
@@ -284,6 +290,8 @@ function parseFrontmatter(raw: string): { meta: Partial<PostMeta>; body: string 
   meta.tags = arr('tags');
   meta.draft = bool('draft') ?? false;
   meta.cover = str('cover');
+  meta.is_private = bool('is_private') ?? false;
+  meta.password_hash = str('password_hash');
   return { meta, body };
 }
 
@@ -295,6 +303,29 @@ function slugify(title: string): string {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 80);
+}
+
+function isSafeSlug(slug: string): boolean {
+  return !!slug && !slug.includes('/') && !slug.includes('\\') && !slug.includes('..') && /^[\p{L}\p{N}-]+$/u.test(slug);
+}
+
+function publicPostSummary(slug: string, meta: Partial<PostMeta>) {
+  return {
+    slug,
+    title: meta.title ?? slug,
+    description: meta.description ?? '',
+    date: meta.date ?? '',
+    category: meta.category ?? '',
+    tags: meta.tags ?? [],
+    draft: meta.draft ?? false,
+    cover: meta.cover ?? '',
+    is_private: meta.is_private ?? false,
+  };
+}
+
+async function isAdminRequest(request: Request, env: Env): Promise<boolean> {
+  const authUser = await getAuthUser(request, env);
+  return authUser?.role === 'admin';
 }
 
 // ─── Auth handlers ────────────────────────────────────────────────────────────
@@ -369,11 +400,77 @@ async function handleMe(request: Request, env: Env, origin: string | null): Prom
   }
 
   const row = await env.DB.prepare(
-    'SELECT id, email, nickname, role FROM users WHERE id = ?',
-  ).bind(user.sub).first<{ id: number; email: string; nickname: string; role: string }>();
+    'SELECT id, email, nickname, role, avatar_url FROM users WHERE id = ?',
+  ).bind(user.sub).first<{ id: number; email: string; nickname: string; role: string; avatar_url?: string }>();
 
   if (!row) return json({ error: 'User not found' }, 404, origin);
   return json(row, 200, origin);
+}
+
+async function updateProfile(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const user = await getAuthUser(request, env);
+  if (!user) return json({ error: 'Unauthorized' }, 401, origin);
+  if (user.sub === 0) return json({ nickname: 'xmin', avatar_url: '' }, 200, origin);
+
+  let body: { nickname?: string; avatar_url?: string };
+  try { body = await request.json() as typeof body; } catch { return json({ error: 'Invalid JSON' }, 400, origin); }
+
+  const nickname = body.nickname?.trim() || user.email.split('@')[0];
+  const avatarUrl = body.avatar_url?.trim() || '';
+  if (nickname.length > 40) return json({ error: 'Nickname too long' }, 400, origin);
+  if (avatarUrl && !/^https?:\/\/[^\s]+$/i.test(avatarUrl)) return json({ error: 'Invalid avatar URL' }, 400, origin);
+
+  const row = await env.DB.prepare(
+    'UPDATE users SET nickname = ?, avatar_url = ? WHERE id = ? RETURNING id, email, nickname, role, avatar_url',
+  ).bind(nickname, avatarUrl, user.sub).first<{ id: number; email: string; nickname: string; role: string; avatar_url?: string }>();
+
+  if (!row) return json({ error: 'User not found' }, 404, origin);
+  return json(row, 200, origin);
+}
+
+async function changePassword(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const user = await getAuthUser(request, env);
+  if (!user) return json({ error: 'Unauthorized' }, 401, origin);
+  if (user.sub === 0) return json({ error: 'Admin password is managed by server secrets' }, 400, origin);
+
+  let body: { old_password?: string; new_password?: string };
+  try { body = await request.json() as typeof body; } catch { return json({ error: 'Invalid JSON' }, 400, origin); }
+  if (!body.old_password || !body.new_password) return json({ error: 'old_password and new_password required' }, 400, origin);
+  if (body.new_password.length < 8) return json({ error: 'Password must be at least 8 characters' }, 400, origin);
+
+  const row = await env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
+    .bind(user.sub)
+    .first<{ password_hash: string }>();
+  if (!row) return json({ error: 'User not found' }, 404, origin);
+  if (!(await checkPassword(body.old_password, row.password_hash))) {
+    return json({ error: 'Invalid current password' }, 401, origin);
+  }
+
+  await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+    .bind(await hashPassword(body.new_password), user.sub)
+    .run();
+  return json({ message: 'Password changed' }, 200, origin);
+}
+
+async function getMyComments(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const user = await getAuthUser(request, env);
+  if (!user) return json({ error: 'Unauthorized' }, 401, origin);
+
+  let userId = user.sub;
+  if (user.sub === 0) {
+    const adminRow = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(ADMIN_EMAIL).first<{ id: number }>();
+    userId = adminRow?.id ?? 0;
+  }
+
+  const rows = await env.DB.prepare(`
+    SELECT id, post_slug, content, created_at
+    FROM comments
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 100
+  `).bind(userId).all<{ id: number; post_slug: string; content: string; created_at: number }>();
+
+  return json(rows.results ?? [], 200, origin);
 }
 
 // ─── Comments handlers ────────────────────────────────────────────────────────
@@ -476,8 +573,9 @@ async function toggleLike(slug: string, request: Request, env: Env, origin: stri
 
 // ─── Post handlers ────────────────────────────────────────────────────────────
 
-async function listPosts(env: Env, origin: string | null): Promise<Response> {
+async function listPosts(request: Request, env: Env, origin: string | null): Promise<Response> {
   const { owner, repo, branch, token } = githubConfig(env);
+  const isAdmin = await isAdminRequest(request, env);
   try {
     const tree = await ghGet<{ tree: GHTreeItem[] }>(
       `repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, token,
@@ -491,26 +589,56 @@ async function listPosts(env: Env, origin: string | null): Promise<Response> {
         try {
           const file = await ghGet<GHFile>(`repos/${owner}/${repo}/contents/${item.path}?ref=${branch}`, token);
           const { meta } = parseFrontmatter(b64DecodeUnicode(file.content));
-          return { slug, title: meta.title ?? slug, description: meta.description ?? '', date: meta.date ?? '', category: meta.category ?? '', tags: meta.tags ?? [], draft: meta.draft ?? false, cover: meta.cover ?? '' };
+          return publicPostSummary(slug, meta);
         } catch {
-          return { slug, title: slug, description: '', date: '', category: '', tags: [], draft: false, cover: '' };
+          return publicPostSummary(slug, {});
         }
       }),
     );
-    posts.sort((a, b) => (b.date > a.date ? 1 : -1));
-    return json(posts, 200, origin);
+    const visiblePosts = isAdmin ? posts : posts.filter(post => !post.draft);
+    visiblePosts.sort((a, b) => (b.date > a.date ? 1 : -1));
+    return json(visiblePosts, 200, origin);
   } catch (err) {
     return json({ error: String(err) }, 500, origin);
   }
 }
 
-async function getPost(slug: string, env: Env, origin: string | null): Promise<Response> {
+async function readPostFile(slug: string, env: Env): Promise<{ file: GHFile; meta: Partial<PostMeta>; body: string }> {
   const { owner, repo, branch, token } = githubConfig(env);
   const filePath = `${CONTENT_PATH}/${slug}.md`;
+  const file = await ghGet<GHFile>(`repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`, token);
+  const { meta, body } = parseFrontmatter(b64DecodeUnicode(file.content));
+  return { file, meta, body };
+}
+
+async function getPost(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+  const isAdmin = await isAdminRequest(request, env);
   try {
-    const file = await ghGet<GHFile>(`repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`, token);
-    const { meta, body } = parseFrontmatter(b64DecodeUnicode(file.content));
-    return json({ slug, ...meta, content: body, sha: file.sha }, 200, origin);
+    const { file, meta, body } = await readPostFile(slug, env);
+    if (meta.draft && !isAdmin) return json({ error: 'Post not found' }, 404, origin);
+    const content = meta.is_private && !isAdmin ? null : body;
+    return json({ ...publicPostSummary(slug, meta), content, sha: isAdmin ? file.sha : undefined }, 200, origin);
+  } catch (err) {
+    const msg = String(err);
+    return json({ error: msg }, msg.includes('404') ? 404 : 500, origin);
+  }
+}
+
+async function verifyPostPassword(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+  let body: { password?: string };
+  try { body = await request.json() as typeof body; } catch { return json({ error: 'Invalid JSON' }, 400, origin); }
+  if (!body.password) return json({ error: 'Password required' }, 400, origin);
+
+  try {
+    const { meta, body: content } = await readPostFile(slug, env);
+    if (meta.draft) return json({ error: 'Post not found' }, 404, origin);
+    if (!meta.is_private) return json({ ...publicPostSummary(slug, meta), content }, 200, origin);
+    if (!meta.password_hash || !(await checkPassword(body.password, meta.password_hash))) {
+      return json({ error: 'Invalid password' }, 401, origin);
+    }
+    return json({ ...publicPostSummary(slug, meta), content }, 200, origin);
   } catch (err) {
     const msg = String(err);
     return json({ error: msg }, msg.includes('404') ? 404 : 500, origin);
@@ -521,6 +649,13 @@ async function createPost(payload: PostPayload, env: Env, origin: string | null)
   const { owner, repo, branch, token } = githubConfig(env);
   const slug = slugify(payload.title);
   if (!slug) return json({ error: 'Could not derive slug from title' }, 400, origin);
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+  if (payload.is_private) {
+    if (!payload.private_password) return json({ error: 'private_password is required for private posts' }, 400, origin);
+    payload.password_hash = await hashPassword(payload.private_password);
+  } else {
+    payload.password_hash = undefined;
+  }
 
   const filePath = `${CONTENT_PATH}/${slug}.md`;
   try {
@@ -535,14 +670,25 @@ async function createPost(payload: PostPayload, env: Env, origin: string | null)
 }
 
 async function updatePost(slug: string, payload: PostPayload, env: Env, origin: string | null): Promise<Response> {
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
   const { owner, repo, branch, token } = githubConfig(env);
   const filePath = `${CONTENT_PATH}/${slug}.md`;
   let currentSha: string;
+  let currentMeta: Partial<PostMeta>;
   try {
     const existing = await ghGet<GHFile>(`repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`, token);
     currentSha = existing.sha;
+    currentMeta = parseFrontmatter(b64DecodeUnicode(existing.content)).meta;
   } catch (err) {
     return json({ error: `Post not found: ${err}` }, 404, origin);
+  }
+  if (payload.is_private) {
+    payload.password_hash = payload.private_password
+      ? await hashPassword(payload.private_password)
+      : currentMeta.password_hash;
+    if (!payload.password_hash) return json({ error: 'private_password is required for private posts' }, 400, origin);
+  } else {
+    payload.password_hash = undefined;
   }
   const encoded = btoa(unescape(encodeURIComponent(buildMarkdown(payload, payload.content))));
   const res = await ghPut(`repos/${owner}/${repo}/contents/${filePath}`, { message: `chore: update post "${payload.title}"`, content: encoded, sha: currentSha, branch }, token);
@@ -551,6 +697,7 @@ async function updatePost(slug: string, payload: PostPayload, env: Env, origin: 
 }
 
 async function deletePost(slug: string, env: Env, origin: string | null): Promise<Response> {
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
   const { owner, repo, branch, token } = githubConfig(env);
   const filePath = `${CONTENT_PATH}/${slug}.md`;
   let currentSha: string;
@@ -563,6 +710,137 @@ async function deletePost(slug: string, env: Env, origin: string | null): Promis
   const res = await ghDelete(`repos/${owner}/${repo}/contents/${filePath}`, { message: `chore: delete post "${slug}"`, sha: currentSha, branch }, token);
   if (!res.ok) return json({ error: `GitHub error: ${await res.text()}` }, 500, origin);
   return json({ slug, message: 'Post deleted' }, 200, origin);
+}
+
+async function recordView(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+  let body: { viewer_id?: string; referrer?: string };
+  try { body = await request.json() as typeof body; } catch { body = {}; }
+  const viewerId = (body.viewer_id ?? '').slice(0, 128);
+  if (!viewerId) return json({ error: 'viewer_id required' }, 400, origin);
+
+  const now = Math.floor(Date.now() / 1000);
+  const recent = await env.DB.prepare(
+    'SELECT id FROM page_views WHERE post_slug = ? AND viewer_id = ? AND created_at > ? LIMIT 1',
+  ).bind(slug, viewerId, now - 1800).first();
+  if (!recent) {
+    await env.DB.prepare('INSERT INTO page_views (post_slug, viewer_id, referrer, created_at) VALUES (?, ?, ?, ?)')
+      .bind(slug, viewerId, (body.referrer ?? '').slice(0, 500), now)
+      .run();
+  }
+  return json({ recorded: !recent }, 200, origin);
+}
+
+async function getAdminStats(request: Request, env: Env, origin: string | null): Promise<Response> {
+  if (!(await isAdminRequest(request, env))) return json({ error: 'Forbidden' }, 403, origin);
+
+  const postsRes = await listPosts(request, env, origin);
+  const posts = await postsRes.json() as Array<ReturnType<typeof publicPostSummary>>;
+  const titleBySlug = new Map(posts.map(post => [post.slug, post.title]));
+  const dayCutoff = Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30;
+
+  const [users, comments, likes, views, viewsByDay, topViews, topLikes, topComments, recentComments, recentUsers] = await Promise.all([
+    env.DB.prepare('SELECT COUNT(*) as count FROM users').first<{ count: number }>(),
+    env.DB.prepare('SELECT COUNT(*) as count FROM comments').first<{ count: number }>(),
+    env.DB.prepare('SELECT COUNT(*) as count FROM likes').first<{ count: number }>(),
+    env.DB.prepare('SELECT COUNT(*) as count FROM page_views').first<{ count: number }>(),
+    env.DB.prepare(`
+      SELECT date(created_at, 'unixepoch') as day, COUNT(*) as views
+      FROM page_views
+      WHERE created_at >= ?
+      GROUP BY day
+      ORDER BY day ASC
+    `).bind(dayCutoff).all<{ day: string; views: number }>(),
+    env.DB.prepare(`
+      SELECT post_slug, COUNT(*) as views
+      FROM page_views
+      GROUP BY post_slug
+      ORDER BY views DESC
+      LIMIT 10
+    `).all<{ post_slug: string; views: number }>(),
+    env.DB.prepare(`
+      SELECT post_slug, COUNT(*) as likes
+      FROM likes
+      GROUP BY post_slug
+      ORDER BY likes DESC
+      LIMIT 10
+    `).all<{ post_slug: string; likes: number }>(),
+    env.DB.prepare(`
+      SELECT post_slug, COUNT(*) as comments
+      FROM comments
+      GROUP BY post_slug
+      ORDER BY comments DESC
+      LIMIT 10
+    `).all<{ post_slug: string; comments: number }>(),
+    env.DB.prepare(`
+      SELECT c.id, c.post_slug, c.content, c.created_at, u.nickname
+      FROM comments c JOIN users u ON c.user_id = u.id
+      ORDER BY c.created_at DESC
+      LIMIT 10
+    `).all<{ id: number; post_slug: string; content: string; created_at: number; nickname: string }>(),
+    env.DB.prepare('SELECT id, email, nickname, role, created_at FROM users ORDER BY created_at DESC LIMIT 10')
+      .all<{ id: number; email: string; nickname: string; role: string; created_at: number }>(),
+  ]);
+
+  const withTitles = <T extends { post_slug: string }>(rows: T[]) =>
+    rows.map(row => ({ ...row, title: titleBySlug.get(row.post_slug) ?? row.post_slug }));
+  const categoryCounts = new Map<string, number>();
+  for (const post of posts) {
+    if (post.category) categoryCounts.set(post.category, (categoryCounts.get(post.category) ?? 0) + 1);
+  }
+
+  return json({
+    summary: {
+      total_posts: posts.length,
+      published_posts: posts.filter(post => !post.draft && !post.is_private).length,
+      draft_posts: posts.filter(post => post.draft).length,
+      private_posts: posts.filter(post => post.is_private).length,
+      total_users: users?.count ?? 0,
+      total_comments: comments?.count ?? 0,
+      total_likes: likes?.count ?? 0,
+      total_views: views?.count ?? 0,
+    },
+    views_by_day: viewsByDay.results ?? [],
+    top_by_views: withTitles(topViews.results ?? []),
+    top_by_likes: withTitles(topLikes.results ?? []),
+    top_by_comments: withTitles(topComments.results ?? []),
+    categories: Array.from(categoryCounts.entries()).map(([category, count]) => ({ category, count })),
+    recent_comments: recentComments.results ?? [],
+    recent_users: recentUsers.results ?? [],
+  }, 200, origin);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.slice(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function uploadImage(request: Request, env: Env, origin: string | null): Promise<Response> {
+  if (!(await isAdminRequest(request, env))) return json({ error: 'Forbidden' }, 403, origin);
+  const form = await request.formData();
+  const fileEntry = form.get('file');
+  if (typeof fileEntry === 'string' || !fileEntry || !('arrayBuffer' in fileEntry)) {
+    return json({ error: 'file required' }, 400, origin);
+  }
+  const file = fileEntry as File;
+  if (!file.type.startsWith('image/')) return json({ error: 'Only image uploads are allowed' }, 400, origin);
+  if (file.size > 5 * 1024 * 1024) return json({ error: 'File too large (max 5MB)' }, 400, origin);
+
+  const ext = (file.name.split('.').pop() || 'bin').replace(/[^\w-]/g, '').toLowerCase().slice(0, 8) || 'bin';
+  const safeName = file.name.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-|-$/g, '').slice(0, 40) || 'image';
+  const path = `public/uploads/${Date.now()}-${safeName}.${ext}`;
+  const { owner, repo, branch, token } = githubConfig(env);
+  const content = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+  const res = await ghPut(`repos/${owner}/${repo}/contents/${path}`, {
+    message: `chore: upload image "${file.name}"`,
+    content,
+    branch,
+  }, token);
+  if (!res.ok) return json({ error: `GitHub error: ${await res.text()}` }, 500, origin);
+  return json({ url: `/${path.replace(/^public\//, '')}` }, 201, origin);
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -586,6 +864,29 @@ export default {
     }
     if (url.pathname === '/api/auth/me' && method === 'GET') {
       return handleMe(request, env, origin);
+    }
+    if (url.pathname === '/api/auth/profile' && method === 'PUT') {
+      return updateProfile(request, env, origin);
+    }
+    if (url.pathname === '/api/auth/change-password' && method === 'POST') {
+      return changePassword(request, env, origin);
+    }
+    if (url.pathname === '/api/auth/my-comments' && method === 'GET') {
+      return getMyComments(request, env, origin);
+    }
+
+    // ── Admin / upload / analytics routes ───────────────────────────────────
+    if (url.pathname === '/api/admin/stats' && method === 'GET') {
+      return getAdminStats(request, env, origin);
+    }
+    if (url.pathname === '/api/upload' && method === 'POST') {
+      return uploadImage(request, env, origin);
+    }
+    const viewMatch = url.pathname.match(/^\/api\/views\/(.+)$/);
+    if (viewMatch) {
+      const slug = decodeURIComponent(viewMatch[1]);
+      if (method === 'POST') return recordView(slug, request, env, origin);
+      return json({ error: 'Method not allowed' }, 405, origin);
     }
 
     // ── Comment routes ───────────────────────────────────────────────────────
@@ -612,6 +913,13 @@ export default {
     }
 
     // ── Post routes ──────────────────────────────────────────────────────────
+    const verifyMatch = url.pathname.match(/^\/api\/posts\/(.+)\/verify$/);
+    if (verifyMatch) {
+      const slug = decodeURIComponent(verifyMatch[1]);
+      if (method === 'POST') return verifyPostPassword(slug, request, env, origin);
+      return json({ error: 'Method not allowed' }, 405, origin);
+    }
+
     if (!url.pathname.startsWith('/api/posts')) {
       return json({ error: 'Not found' }, 404, origin);
     }
@@ -620,8 +928,8 @@ export default {
     const slug = slugMatch ? decodeURIComponent(slugMatch[1]) : null;
 
     if (method === 'GET') {
-      if (slug) return getPost(slug, env, origin);
-      return listPosts(env, origin);
+      if (slug) return getPost(slug, request, env, origin);
+      return listPosts(request, env, origin);
     }
 
     // Mutating post routes — require admin JWT or legacy password

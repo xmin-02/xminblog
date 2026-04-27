@@ -377,6 +377,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function safeUrl(raw, kind = 'link') {
+    const value = String(raw ?? '').trim().replace(/&amp;/g, '&');
+    if (!value) return '#';
+    try {
+      const parsed = new URL(value, window.location.origin);
+      const allowed = kind === 'image'
+        ? ['http:', 'https:']
+        : ['http:', 'https:', 'mailto:', 'tel:'];
+      if (!allowed.includes(parsed.protocol)) return '#';
+      return esc(value);
+    } catch {
+      return '#';
+    }
+  }
+
   function getViewerId() {
     let v = localStorage.getItem('viewer_id');
     if (!v) {
@@ -405,8 +420,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
     // Inline media/links
-    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />');
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) =>
+      `<img src="${safeUrl(url, 'image')}" alt="${esc(alt)}" />`);
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) =>
+      `<a href="${safeUrl(url)}" target="_blank" rel="noopener">${label}</a>`);
 
     // Headings — wrap with blank lines so each becomes its own block
     html = html.replace(/^#### (.+)$/gm, '\n\n<h4>$1</h4>\n\n');
