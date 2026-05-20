@@ -365,6 +365,17 @@ function isSafeSlug(slug: string): boolean {
   return !!slug && !slug.includes('/') && !slug.includes('\\') && !slug.includes('..') && /^[\p{L}\p{N}-]+$/u.test(slug);
 }
 
+async function postExists(slug: string, env: Env): Promise<boolean> {
+  const row = await env.DB.prepare('SELECT slug FROM posts WHERE slug = ? LIMIT 1').bind(slug).first<{ slug: string }>();
+  return !!row;
+}
+
+async function validatePostSlug(slug: string, env: Env, origin: string | null): Promise<Response | null> {
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+  if (!(await postExists(slug, env))) return json({ error: 'Post not found' }, 404, origin);
+  return null;
+}
+
 
 function contentBackend(env: Env): 'github' | 'db' {
   return env.CONTENT_BACKEND === 'db' ? 'db' : 'github';
@@ -587,7 +598,8 @@ async function getMyComments(request: Request, env: Env, origin: string | null):
 // ─── Comments handlers ────────────────────────────────────────────────────────
 
 async function getComments(slug: string, env: Env, origin: string | null): Promise<Response> {
-  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+  const invalid = await validatePostSlug(slug, env, origin);
+  if (invalid) return invalid;
   const rows = await env.DB.prepare(`
     SELECT c.id, c.content, c.created_at, u.nickname, u.id as user_id
     FROM comments c JOIN users u ON c.user_id = u.id
@@ -599,7 +611,8 @@ async function getComments(slug: string, env: Env, origin: string | null): Promi
 }
 
 async function addComment(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
-  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+  const invalid = await validatePostSlug(slug, env, origin);
+  if (invalid) return invalid;
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: 'Login required to comment' }, 401, origin);
 
@@ -647,7 +660,8 @@ async function deleteComment(id: number, request: Request, env: Env, origin: str
 // ─── Likes handlers ───────────────────────────────────────────────────────────
 
 async function getLikes(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
-  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+  const invalid = await validatePostSlug(slug, env, origin);
+  if (invalid) return invalid;
   const countRow = await env.DB.prepare('SELECT COUNT(*) as count FROM likes WHERE post_slug = ?').bind(slug).first<{ count: number }>();
   const count = countRow?.count ?? 0;
 
@@ -663,7 +677,8 @@ async function getLikes(slug: string, request: Request, env: Env, origin: string
 }
 
 async function toggleLike(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
-  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+  const invalid = await validatePostSlug(slug, env, origin);
+  if (invalid) return invalid;
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: 'Login required to like' }, 401, origin);
 

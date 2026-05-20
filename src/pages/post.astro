@@ -576,6 +576,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const btn = document.getElementById('like-btn');
     if (!btn) return;
     btn.className = `like-btn${_liked ? ' liked' : ''}`;
+    btn.setAttribute('aria-label', _liked ? `좋아요 취소, 현재 ${_likeCount}개` : `좋아요, 현재 ${_likeCount}개`);
+    btn.title = _liked ? '좋아요 취소' : '좋아요';
     btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="${_liked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg> ${_likeCount}`;
   }
 
@@ -596,8 +598,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         localStorage.removeItem('auth_token');
         localStorage.removeItem('auth_user');
         window.location.href = '/login';
+      } else {
+        let message = '좋아요 처리에 실패했습니다.';
+        try {
+          const data = await res.json();
+          if (data?.error) message += ` (${data.error})`;
+        } catch {}
+        alert(message);
       }
-    } catch {}
+    } catch {
+      alert('좋아요 처리에 실패했습니다. 네트워크 상태를 확인해주세요.');
+    }
   }
 
   // ── Comments ──────────────────────────────────────────────────────────────
@@ -663,20 +674,31 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <textarea id="comment-input" class="comment-textarea" placeholder="댓글을 입력하세요..." maxlength="1000"></textarea>
       <div class="flex items-center justify-between">
         <span class="text-xs text-[var(--color-text-secondary)]"><span id="comment-char">0</span>/1000</span>
-        <button id="comment-btn" class="comment-submit" onclick="submitComment('${slug}')">등록</button>
+        <button id="comment-btn" class="comment-submit" onclick="submitComment('${slug}')" disabled>등록</button>
       </div>
     </div>`;
 
-    document.getElementById('comment-input').addEventListener('input', function() {
-      document.getElementById('comment-char').textContent = this.value.length;
-    });
+    document.getElementById('comment-input').addEventListener('input', updateCommentSubmitState);
+    updateCommentSubmitState();
+  }
+
+  function updateCommentSubmitState() {
+    const input = document.getElementById('comment-input');
+    const btn = document.getElementById('comment-btn');
+    const char = document.getElementById('comment-char');
+    const value = input?.value || '';
+    if (char) char.textContent = value.length;
+    if (btn) btn.disabled = !value.trim();
   }
 
   async function submitComment(slug) {
     const input = document.getElementById('comment-input');
     const btn = document.getElementById('comment-btn');
     const content = input?.value?.trim();
-    if (!content) return;
+    if (!content) {
+      updateCommentSubmitState();
+      return;
+    }
     btn.disabled = true;
     btn.textContent = '등록 중...';
     const token = localStorage.getItem('auth_token');
@@ -688,16 +710,26 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       });
       if (res.ok) {
         input.value = '';
-        document.getElementById('comment-char').textContent = '0';
+        updateCommentSubmitState();
         await loadComments(slug);
       } else if (res.status === 401) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('auth_user');
         window.location.href = '/login';
+      } else {
+        let message = '댓글 등록에 실패했습니다.';
+        try {
+          const data = await res.json();
+          if (data?.error) message += ` (${data.error})`;
+        } catch {}
+        alert(message);
       }
-    } catch {}
+    } catch {
+      alert('댓글 등록에 실패했습니다. 네트워크 상태를 확인해주세요.');
+    }
     btn.disabled = false;
     btn.textContent = '등록';
+    updateCommentSubmitState();
   }
 
   async function deleteComment(id) {
@@ -848,7 +880,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           ${isLocked ? '' : `
           <!-- Like button -->
           <div class="flex items-center gap-3 mt-10 pt-6 border-t border-[var(--color-border)]">
-            <button id="like-btn" class="like-btn" onclick="handleLike()">
+            <button id="like-btn" class="like-btn" onclick="handleLike()" aria-label="좋아요, 현재 0개" title="좋아요">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
               0
             </button>
