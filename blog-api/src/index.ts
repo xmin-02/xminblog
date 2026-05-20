@@ -329,6 +329,13 @@ async function isAdminRequest(request: Request, env: Env): Promise<boolean> {
   return authUser?.role === 'admin';
 }
 
+async function requireAdminRequest(request: Request, env: Env, origin: string | null): Promise<JWTPayload | Response> {
+  const authUser = await getAuthUser(request, env);
+  if (!authUser) return json({ error: 'Unauthorized' }, 401, origin);
+  if (authUser.role !== 'admin') return json({ error: 'Forbidden' }, 403, origin);
+  return authUser;
+}
+
 async function ensureAdminUserId(env: Env): Promise<number> {
   const adminRow = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(ADMIN_EMAIL).first<{ id: number }>();
   if (adminRow) return adminRow.id;
@@ -740,7 +747,8 @@ async function recordView(slug: string, request: Request, env: Env, origin: stri
 }
 
 async function getAdminStats(request: Request, env: Env, origin: string | null): Promise<Response> {
-  if (!(await isAdminRequest(request, env))) return json({ error: 'Forbidden' }, 403, origin);
+  const admin = await requireAdminRequest(request, env, origin);
+  if (admin instanceof Response) return admin;
 
   const postsRes = await listPosts(request, env, origin);
   const posts = await postsRes.json() as Array<ReturnType<typeof publicPostSummary>>;
@@ -827,7 +835,8 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 async function uploadImage(request: Request, env: Env, origin: string | null): Promise<Response> {
-  if (!(await isAdminRequest(request, env))) return json({ error: 'Forbidden' }, 403, origin);
+  const admin = await requireAdminRequest(request, env, origin);
+  if (admin instanceof Response) return admin;
   const form = await request.formData();
   const fileEntry = form.get('file');
   if (typeof fileEntry === 'string' || !fileEntry || !('arrayBuffer' in fileEntry)) {

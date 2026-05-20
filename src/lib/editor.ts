@@ -336,8 +336,15 @@ export function createBlogEditor(opts: BlogEditorOptions): BlogEditorHandle {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const authMessage = res.status === 401
+          ? '관리자 로그인이 만료되었습니다. 글 내용을 복사해 둔 뒤 다시 로그인해주세요.'
+          : res.status === 403
+            ? '관리자 권한이 확인되지 않아 업로드할 수 없습니다. 관리자 계정으로 다시 로그인해주세요.'
+            : '';
+        throw new Error(authMessage || data.error || `HTTP ${res.status}`);
+      }
       return data.url as string;
     } catch (err: any) {
       alert('업로드 실패: ' + err.message);

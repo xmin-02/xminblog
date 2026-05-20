@@ -505,6 +505,53 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     headings.forEach(h => obs.observe(h));
   }
 
+  function clearStoredAuth() {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+  }
+
+  function showAdminAuthRequired(message = '관리자 로그인이 필요합니다.') {
+    const container = document.getElementById('post-container');
+    if (!container) return;
+    container.innerHTML = `
+      <div class="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-card)] px-5 py-8 text-center">
+        <p class="text-base font-semibold mb-2" style="color:var(--color-text);">관리자 인증 필요</p>
+        <p class="text-sm mb-5" style="color:var(--color-text-secondary);">${esc(message)}</p>
+        <a href="/login" class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold"
+          style="background:var(--color-accent);color:white;">다시 로그인</a>
+      </div>`;
+  }
+
+  async function requireAdminForEdit() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      showAdminAuthRequired('새 글 작성과 편집은 관리자 계정으로 로그인한 뒤 사용할 수 있습니다.');
+      return false;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401 || res.status === 403) {
+        clearStoredAuth();
+        showAdminAuthRequired('로그인이 만료되었거나 관리자 권한이 확인되지 않습니다. 다시 로그인해주세요.');
+        return false;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const user = await res.json();
+      localStorage.setItem('auth_user', JSON.stringify(user));
+      if (user.role !== 'admin') {
+        showAdminAuthRequired('현재 계정은 관리자 권한이 없어 글 작성과 이미지 업로드를 사용할 수 없습니다.');
+        return false;
+      }
+      return true;
+    } catch {
+      showAdminAuthRequired('관리자 인증 상태를 확인하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.');
+      return false;
+    }
+  }
+
   // ── Likes ─────────────────────────────────────────────────────────────────
 
   let _likeCount = 0;
@@ -695,13 +742,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </div>`;
 
     if (slug === 'new') {
+      if (!(await requireAdminForEdit())) return;
       _isNewPost = true;
       _currentSlug = '';
       _currentPost = { title: '', description: '', content: '', category: '', tags: [], date: new Date().toISOString().slice(0, 10), draft: false, cover: '', is_private: false };
       document.title = '새 글 작성 — xmin.blog';
       container.innerHTML = '<article></article>';
       if (commentsSection) commentsSection.style.display = 'none';
-      enterEditMode();
+      await enterEditMode(true);
       return;
     }
 
@@ -994,7 +1042,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     el.style.height = (el.scrollHeight + 2) + 'px';
   }
 
-  function enterEditMode() {
+  async function enterEditMode(skipAuthCheck = false) {
+    if (!skipAuthCheck && !(await requireAdminForEdit())) return;
     const post = _currentPost;
     if (!post) return;
     const commentsSection = document.getElementById('comments-section');
@@ -1197,8 +1246,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           body: JSON.stringify(body),
         });
       }
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          clearStoredAuth();
+          throw new Error('관리자 로그인이 만료되었거나 권한이 없습니다. 글 내용을 복사해 둔 뒤 다시 로그인해주세요.');
+        }
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
       status.textContent = '저장됨!'; status.style.color = '#10b981';
       _editor?.destroy?.(); _editor = null;
       if (_isNewPost && data.slug) {
