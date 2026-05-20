@@ -265,6 +265,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     try { return JSON.parse(localStorage.getItem('auth_user') || '{}').role === 'admin'; } catch { return false; }
   }
 
+  function postUrl(slug) {
+    return `/post#${encodeURIComponent(slug)}`;
+  }
+
   function renderPosts(posts) {
     const list = document.getElementById('post-list');
     const isAdmin = isAdminUser();
@@ -282,7 +286,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const date = post.date ? new Date(post.date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
       const adminBtns = isAdmin ? `
         <div class="admin-card-btns">
-          <a href="/post#${esc(post.slug)}" class="admin-card-btn" title="편집" onclick="event.stopPropagation();">
+          <a href="${postUrl(post.slug)}" class="admin-card-btn" title="편집" onclick="event.stopPropagation();">
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </a>
           <button class="admin-card-btn del" title="삭제" onclick="event.preventDefault();event.stopPropagation();adminDeletePost('${esc(post.slug)}');">
@@ -292,7 +296,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const lockIcon = post.is_private ? `<svg class="inline-block w-3.5 h-3.5 align-[-2px] mr-1" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" style="color:#ca8a04;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>` : '';
       return `
         <div class="post-card-wrap">
-          <a href="/blog/${encodeURIComponent(post.slug)}/" class="post-card" data-category="${esc(post.category)}">
+          <a href="${postUrl(post.slug)}" class="post-card" data-category="${esc(post.category)}">
             <div class="post-meta">
               ${post.category ? `<span class="post-cat">[${esc(post.category)}]</span>` : ''}
               <span>${esc(date)}</span>
@@ -428,7 +432,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         recentEl.innerHTML = recent.map(p => {
           const date = p.date ? new Date(p.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
           return `<li>
-            <a href="/blog/${encodeURIComponent(p.slug)}/" class="block group">
+            <a href="${postUrl(p.slug)}" class="block group">
               <p class="text-xs font-medium text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors line-clamp-2 leading-snug">${esc(p.title)}</p>
               <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">${esc(date)}</p>
             </a>
