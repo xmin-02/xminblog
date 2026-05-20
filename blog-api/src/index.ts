@@ -38,6 +38,7 @@ export interface Env {
   GITHUB_BRANCH?: string;
   CONTENT_BACKEND?: string;
   UPLOADS?: { put(file: File, request: Request): Promise<string> };
+  COMMENT_BLOCKLIST?: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -69,6 +70,18 @@ function adminLoginEmails(env: Env): string[] {
 
 function isAdminLoginEmail(email: string, env: Env): boolean {
   return adminLoginEmails(env).includes(normalizeEmail(email));
+}
+
+function commentBlocklist(env: Env): string[] {
+  return (env.COMMENT_BLOCKLIST || '')
+    .split(',')
+    .map(term => term.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function blockedCommentTerm(content: string, env: Env): string | null {
+  const normalized = content.toLowerCase().normalize('NFKC');
+  return commentBlocklist(env).find(term => normalized.includes(term.normalize('NFKC'))) || null;
 }
 
 // Best-effort in-memory throttling. This is intentionally local-process/local-isolate
@@ -643,6 +656,7 @@ async function addComment(slug: string, request: Request, env: Env, origin: stri
   const content = body.content?.trim();
   if (!content || content.length < 1) return json({ error: 'Comment cannot be empty' }, 400, origin);
   if (content.length > 1000) return json({ error: 'Comment too long (max 1000 chars)' }, 400, origin);
+  if (blockedCommentTerm(content, env)) return json({ error: 'Blocked comment content' }, 400, origin);
 
   // Resolve user_id: admin (sub=0) is stored lazily in the DB on first use
   let userId = user.sub;
@@ -654,6 +668,12 @@ async function addComment(slug: string, request: Request, env: Env, origin: stri
   } else {
     userId = await ensureAdminUserId(env);
   }
+
+  const now = Math.floor(Date.now() / 1000);
+  const duplicate = await env.DB.prepare(
+    'SELECT id FROM comments WHERE post_slug = ? AND user_id = ? AND content = ? AND created_at > ? LIMIT 1',
+  ).bind(slug, userId, content, now - 60).first<{ id: number }>();
+  if (duplicate) return json({ error: '잠시 후 다시 댓글을 남겨주세요' }, 429, origin);
 
   const result = await env.DB.prepare(
     'INSERT INTO comments (post_slug, user_id, content) VALUES (?, ?, ?) RETURNING id, created_at',

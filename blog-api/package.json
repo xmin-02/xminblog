@@ -10,7 +10,8 @@
     "start:home": "node home-server.mjs",
     "dev:worker": "npx wrangler dev",
     "deploy:worker": "npx wrangler deploy",
-    "import:markdown": "node scripts/import-markdown-to-db.mjs"
+    "import:markdown": "node scripts/import-markdown-to-db.mjs",
+    "backup:home": "./scripts/backup-home-server.sh"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241127.0",

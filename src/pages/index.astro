@@ -371,18 +371,28 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
   }
 
+  function normalizeSearchText(value) {
+    return String(value || '').toLowerCase().normalize('NFKC');
+  }
+
+  function postSearchText(post) {
+    return normalizeSearchText([
+      post.title,
+      post.description,
+      post.category,
+      post.slug,
+      ...(Array.isArray(post.tags) ? post.tags : []),
+    ].join(' '));
+  }
+
   function filterAndSearch() {
     let filtered = allPosts;
     if (activeCategory !== 'all') {
       filtered = filtered.filter(p => p.category === activeCategory);
     }
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(p =>
-        (p.title || '').toLowerCase().includes(q) ||
-        (p.description || '').toLowerCase().includes(q) ||
-        (p.category || '').toLowerCase().includes(q)
-      );
+      const terms = normalizeSearchText(searchQuery).split(/\s+/).filter(Boolean);
+      filtered = filtered.filter(p => terms.every(term => postSearchText(p).includes(term)));
     }
     renderPosts(filtered);
 
@@ -724,7 +734,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       append('  <span class="t-ok">pwd</span>            현재 경로');
       append('  <span class="t-ok">categories</span>     카테고리 전체 목록');
       append('  <span class="t-ok">tags</span>           태그 전체 목록');
-      append('  <span class="t-ok">search</span> &lt;q&gt;    제목/설명 검색');
+      append('  <span class="t-ok">search</span> &lt;q&gt;    제목/설명/태그/슬러그 검색');
       append('  <span class="t-ok">clear</span>          화면 지우기 (Ctrl+L)');
       append('  <span class="t-ok">history</span>        명령어 이력');
       append('  <span class="t-dim">단축키: ↑↓ 이력 · Tab 자동완성 · Ctrl+C 취소 · Ctrl+L 클리어</span>');
@@ -754,12 +764,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
 
     function cmdSearch(args) {
-      const q = args.trim().toLowerCase();
-      if (!q) { append('<span class="t-error">search: 검색어 필요</span>'); return; }
-      const hits = posts.filter(p =>
-        (p.title || '').toLowerCase().includes(q) ||
-        (p.description || '').toLowerCase().includes(q)
-      );
+      const q = args.trim().toLowerCase().normalize('NFKC');
+      const terms = q.split(/\s+/).filter(Boolean);
+      if (!terms.length) { append('<span class="t-error">search: 검색어 필요</span>'); return; }
+      const hits = posts.filter(p => {
+        const haystack = [p.title, p.description, p.category, p.slug, ...(p.tags || [])].join(' ').toLowerCase().normalize('NFKC');
+        return terms.every(term => haystack.includes(term));
+      });
       if (!hits.length) { append('<span class="t-dim">일치하는 글 없음</span>'); return; }
       for (const h of hits) {
         const lock = h.is_private ? ' <span class="t-priv">🔒</span>' : '';

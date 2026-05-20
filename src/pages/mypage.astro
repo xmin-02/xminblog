@@ -87,7 +87,20 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
       <!-- My Posts (admin only) -->
       <section id="mp-posts-section" class="sidebar-widget hidden" style="padding:1.5rem 1.75rem;">
-        <p class="sidebar-widget-title">내가 쓴 글</p>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <p class="sidebar-widget-title" style="margin-bottom:0;">내가 쓴 글</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <input id="mp-post-search" type="search" placeholder="제목/태그 검색" class="mp-filter-input" />
+            <select id="mp-post-filter" class="mp-filter-input" aria-label="글 필터">
+              <option value="all">전체</option>
+              <option value="published">공개 글</option>
+              <option value="draft">초안</option>
+              <option value="private">비공개</option>
+              <option value="cover">대표 이미지 있음</option>
+            </select>
+          </div>
+        </div>
+        <p id="mp-posts-count" class="mp-meta mb-2"></p>
         <div id="mp-posts-list" class="space-y-2">
           <p class="text-xs text-[var(--color-text-secondary)]">불러오는 중...</p>
         </div>
@@ -144,6 +157,18 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     font-family: var(--font-mono);
     margin-left: 0.35rem;
   }
+  .mp-filter-input {
+    min-height: 2rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.45rem;
+    background: var(--color-bg-secondary);
+    color: var(--color-text);
+    padding: 0.35rem 0.55rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    outline: none;
+  }
+  .mp-filter-input:focus { border-color: var(--color-accent); }
 </style>
 
 <script is:inline>
@@ -154,6 +179,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   let _user = null;
+  let _mpPosts = [];
 
   async function mpInit() {
     const token = localStorage.getItem('auth_token');
@@ -283,32 +309,60 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
   });
 
+  function normalizeMpSearch(value) {
+    return String(value || '').toLowerCase().normalize('NFKC');
+  }
+
+  function renderMyPosts() {
+    const list = document.getElementById('mp-posts-list');
+    const count = document.getElementById('mp-posts-count');
+    const mode = document.getElementById('mp-post-filter')?.value || 'all';
+    const query = normalizeMpSearch(document.getElementById('mp-post-search')?.value || '').split(/\s+/).filter(Boolean);
+    let posts = _mpPosts.slice();
+    if (mode === 'published') posts = posts.filter(p => !p.draft && !p.is_private);
+    if (mode === 'draft') posts = posts.filter(p => p.draft);
+    if (mode === 'private') posts = posts.filter(p => p.is_private);
+    if (mode === 'cover') posts = posts.filter(p => !!p.cover);
+    if (query.length) {
+      posts = posts.filter(p => {
+        const haystack = normalizeMpSearch([p.title, p.description, p.category, p.slug, ...(p.tags || [])].join(' '));
+        return query.every(term => haystack.includes(term));
+      });
+    }
+    count.textContent = `${posts.length.toLocaleString('ko-KR')}개 표시 / 전체 ${_mpPosts.length.toLocaleString('ko-KR')}개`;
+    if (!posts.length) { list.innerHTML = '<p class="text-xs text-[var(--color-text-secondary)]">조건에 맞는 글이 없습니다.</p>'; return; }
+    list.innerHTML = posts.map(p => {
+      const date = p.date ? new Date(p.date).toLocaleDateString('ko-KR') : '';
+      const draft = p.draft ? '<span class="mp-priv">[draft]</span>' : '';
+      const priv = p.is_private ? '<span class="mp-priv">[private]</span>' : '';
+      const cover = p.cover ? '<span class="mp-priv" style="color:var(--color-accent);">[cover]</span>' : '';
+      return `<div class="mp-row flex items-start justify-between gap-3">
+        <div class="min-w-0 flex-1">
+          <a href="/post?slug=${encodeURIComponent(p.slug)}" class="mp-link text-sm">${esc(p.title)}</a>${draft}${priv}${cover}
+          <p class="mp-meta mt-0.5">${esc(date)} · [${esc(p.category)}] · ${esc(p.slug)}</p>
+        </div>
+        <div class="flex gap-1 flex-shrink-0">
+          <a href="/post?slug=${encodeURIComponent(p.slug)}" class="mp-del-btn" style="color:var(--color-accent);">편집</a>
+          <button class="mp-del-btn" onclick="mpDeletePost('${esc(p.slug)}')">삭제</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
   async function loadMyPosts() {
     const list = document.getElementById('mp-posts-list');
     try {
-      const res = await fetch(`${API_BASE}/api/posts`);
+      const res = await fetch(`${API_BASE}/api/posts`, { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}` } });
       if (!res.ok) throw new Error('failed');
-      const posts = await res.json();
-      if (!posts.length) { list.innerHTML = '<p class="text-xs text-[var(--color-text-secondary)]">글이 없습니다.</p>'; return; }
-      list.innerHTML = posts.map(p => {
-        const date = p.date ? new Date(p.date).toLocaleDateString('ko-KR') : '';
-        const draft = p.draft ? '<span class="mp-priv">[draft]</span>' : '';
-        const priv = p.is_private ? '<span class="mp-priv">[private]</span>' : '';
-        return `<div class="mp-row flex items-start justify-between gap-3">
-          <div class="min-w-0 flex-1">
-            <a href="/post?slug=${encodeURIComponent(p.slug)}" class="mp-link text-sm">${esc(p.title)}</a>${draft}${priv}
-            <p class="mp-meta mt-0.5">${esc(date)} · [${esc(p.category)}] · ${esc(p.slug)}</p>
-          </div>
-          <div class="flex gap-1 flex-shrink-0">
-            <a href="/post?slug=${encodeURIComponent(p.slug)}" class="mp-del-btn" style="color:var(--color-accent);">편집</a>
-            <button class="mp-del-btn" onclick="mpDeletePost('${esc(p.slug)}')">삭제</button>
-          </div>
-        </div>`;
-      }).join('');
+      _mpPosts = await res.json();
+      renderMyPosts();
     } catch (err) {
       list.innerHTML = `<p class="text-xs" style="color:#ef4444;">불러오기 실패: ${esc(err.message)}</p>`;
     }
   }
+
+  document.getElementById('mp-post-search')?.addEventListener('input', renderMyPosts);
+  document.getElementById('mp-post-filter')?.addEventListener('change', renderMyPosts);
 
   async function mpDeletePost(slug) {
     if (!confirm(`"${slug}" 글을 삭제할까요?`)) return;
@@ -319,7 +373,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({}),
       });
-      if (res.ok) loadMyPosts();
+      if (res.ok) {
+        _mpPosts = _mpPosts.filter(p => p.slug !== slug);
+        renderMyPosts();
+      }
       else { const d = await res.json(); alert('삭제 실패: ' + (d.error || res.status)); }
     } catch (e) { alert('오류: ' + e.message); }
   }
