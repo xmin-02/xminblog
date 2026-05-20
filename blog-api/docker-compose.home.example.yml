@@ -9,5 +9,9 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       DB_DRIVER: postgres
+      CONTENT_BACKEND: db
+      UPLOAD_DIR: /app/data/uploads
+    volumes:
+      - ./data/uploads:/app/data/uploads
     ports:
       - "0.0.0.0:3001:3000"

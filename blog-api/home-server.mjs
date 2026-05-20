@@ -8,8 +8,9 @@
  */
 import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
-import { mkdirSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { createReadStream, mkdirSync, readFileSync } from 'node:fs';
+import { stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
 import pg from 'pg';
 import worker from './dist/index.js';
 
@@ -20,6 +21,8 @@ const port = Number(process.env.PORT || 8787);
 const host = process.env.HOST || '127.0.0.1';
 const dbDriver = (process.env.DB_DRIVER || (process.env.DATABASE_URL ? 'postgres' : 'sqlite')).toLowerCase();
 const dbPath = resolve(cwd, process.env.SQLITE_PATH || './data/blog.sqlite');
+const uploadDir = resolve(cwd, process.env.UPLOAD_DIR || './data/uploads');
+const publicUploadBase = (process.env.PUBLIC_UPLOAD_BASE || '/uploads').replace(/\/+$/, '');
 
 function requiredEnv(name) {
   const value = process.env[name];
@@ -29,11 +32,16 @@ function requiredEnv(name) {
   return value;
 }
 
+function sqliteParam(value) {
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  return value;
+}
+
 class SQLiteD1Statement {
   constructor(db, sql, params = []) {
     this.db = db;
     this.sql = sql;
-    this.params = params;
+    this.params = params.map(sqliteParam);
   }
 
   bind(...params) {
@@ -124,6 +132,65 @@ class PostgresD1Database {
   }
 }
 
+function contentTypeFor(path) {
+  const ext = path.toLowerCase().split('.').pop();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'gif') return 'image/gif';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'svg') return 'image/svg+xml';
+  return 'application/octet-stream';
+}
+
+async function serveUpload(req, res) {
+  if (!['GET', 'HEAD'].includes(req.method || 'GET')) return false;
+  const hostHeader = req.headers.host || `${host}:${port}`;
+  const url = new URL(req.url || '/', `http://${hostHeader}`);
+  if (!url.pathname.startsWith('/uploads/')) return false;
+
+  const requested = basename(decodeURIComponent(url.pathname.slice('/uploads/'.length)));
+  if (!requested) return false;
+  const filePath = join(uploadDir, requested);
+  try {
+    const info = await stat(filePath);
+    if (!info.isFile()) return false;
+    res.statusCode = 200;
+    res.setHeader('content-type', contentTypeFor(filePath));
+    res.setHeader('cache-control', 'public, max-age=31536000, immutable');
+    if (req.method === 'HEAD') {
+      res.end();
+      return true;
+    }
+    createReadStream(filePath).pipe(res);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+class LocalUploads {
+  constructor(dir, base) {
+    this.dir = dir;
+    this.base = base;
+    mkdirSync(dir, { recursive: true });
+  }
+
+  async put(file) {
+    const extFromName = (file.name.split('.').pop() || '').replace(/[^\w-]/g, '').toLowerCase();
+    const extFromType = file.type.split('/')[1]?.replace('jpeg', 'jpg').replace(/[^\w-]/g, '').toLowerCase();
+    const ext = (extFromName || extFromType || 'bin').slice(0, 8);
+    const stem = file.name
+      .replace(/\.[^.]+$/, '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}-]+/gu, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40) || 'image';
+    const name = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${stem}.${ext}`;
+    await writeFile(join(this.dir, name), Buffer.from(await file.arrayBuffer()), { flag: 'wx' });
+    return `${this.base}/${encodeURIComponent(name)}`;
+  }
+}
+
 async function initDb(db) {
   if (dbDriver === 'postgres') {
     await db.exec(readFileSync(new URL('./schema.postgres.sql', import.meta.url), 'utf8'));
@@ -193,17 +260,20 @@ const DB = await createDb();
 await initDb(DB);
 
 const env = {
-  GITHUB_TOKEN: requiredEnv('GITHUB_TOKEN'),
+  GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
   ADMIN_PASSWORD: requiredEnv('ADMIN_PASSWORD'),
   JWT_SECRET: requiredEnv('JWT_SECRET'),
   GITHUB_OWNER: process.env.GITHUB_OWNER,
   GITHUB_REPO: process.env.GITHUB_REPO,
   GITHUB_BRANCH: process.env.GITHUB_BRANCH,
+  CONTENT_BACKEND: process.env.CONTENT_BACKEND || 'db',
+  UPLOADS: new LocalUploads(uploadDir, publicUploadBase),
   DB,
 };
 
 const server = createServer(async (req, res) => {
   try {
+    if (await serveUpload(req, res)) return;
     const request = toRequest(req);
     const response = await worker.fetch(request, env);
     await writeResponse(res, response);
@@ -219,4 +289,6 @@ server.listen(port, host, () => {
   console.log(`blog-api home server listening on http://${host}:${port}`);
   console.log(`DB driver: ${dbDriver}`);
   if (dbDriver === 'sqlite') console.log(`SQLite DB: ${dbPath}`);
+  console.log(`Content backend: ${env.CONTENT_BACKEND}`);
+  console.log(`Upload dir: ${uploadDir}`);
 });

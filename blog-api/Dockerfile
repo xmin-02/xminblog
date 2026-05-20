@@ -15,5 +15,6 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY home-server.mjs schema.sql schema.postgres.sql ./
+COPY scripts ./scripts
 EXPOSE 3000
 CMD ["node", "home-server.mjs"]

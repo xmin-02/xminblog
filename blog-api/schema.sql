@@ -42,3 +42,22 @@ CREATE TABLE IF NOT EXISTS page_views (
 
 CREATE INDEX IF NOT EXISTS idx_page_views_slug ON page_views(post_slug);
 CREATE INDEX IF NOT EXISTS idx_page_views_viewer ON page_views(post_slug, viewer_id, created_at);
+
+CREATE TABLE IF NOT EXISTS posts (
+  slug TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  date TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT '',
+  tags TEXT NOT NULL DEFAULT '[]',
+  draft INTEGER NOT NULL DEFAULT 0,
+  cover TEXT NOT NULL DEFAULT '',
+  is_private INTEGER NOT NULL DEFAULT 0,
+  password_hash TEXT,
+  content TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE INDEX IF NOT EXISTS idx_posts_date ON posts(date);
+CREATE INDEX IF NOT EXISTS idx_posts_visibility ON posts(draft, is_private);

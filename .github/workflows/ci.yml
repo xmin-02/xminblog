@@ -36,14 +36,17 @@ jobs:
           ADMIN_PASSWORD: test-admin-password
           JWT_SECRET: test-jwt-secret-for-ci
           DB_DRIVER: sqlite
+          CONTENT_BACKEND: db
           SQLITE_PATH: /tmp/xmin-blog-ci.sqlite
+          UPLOAD_DIR: /tmp/xmin-blog-ci-uploads
+          PUBLIC_UPLOAD_BASE: http://127.0.0.1:8791/uploads
           HOST: 127.0.0.1
           PORT: 8791
         run: |
           node home-server.mjs > /tmp/xmin-blog-api.log 2>&1 &
           pid=$!
           for i in {1..20}; do
-            if curl -fsS http://127.0.0.1:8791/health; then
+            if curl -fsS http://127.0.0.1:8791/health && curl -fsS http://127.0.0.1:8791/api/posts; then
               kill "$pid"
               wait "$pid" || true
               exit 0

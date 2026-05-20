@@ -34,6 +34,8 @@ export interface Env {
   GITHUB_OWNER?: string;
   GITHUB_REPO?: string;
   GITHUB_BRANCH?: string;
+  CONTENT_BACKEND?: string;
+  UPLOADS?: { put(file: File, request: Request): Promise<string> };
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -338,6 +340,40 @@ function isSafeSlug(slug: string): boolean {
   return !!slug && !slug.includes('/') && !slug.includes('\\') && !slug.includes('..') && /^[\p{L}\p{N}-]+$/u.test(slug);
 }
 
+
+function contentBackend(env: Env): 'github' | 'db' {
+  return env.CONTENT_BACKEND === 'db' ? 'db' : 'github';
+}
+
+function postTags(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+  if (typeof raw !== 'string' || !raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return raw.split(',').map(tag => tag.trim()).filter(Boolean);
+  }
+}
+
+function dbBool(value: unknown): boolean {
+  return value === true || value === 1 || value === '1' || value === 'true';
+}
+
+function dbPostSummary(row: any) {
+  return {
+    slug: String(row.slug),
+    title: row.title ?? row.slug,
+    description: row.description ?? '',
+    date: row.date ?? '',
+    category: row.category ?? '',
+    tags: postTags(row.tags),
+    draft: dbBool(row.draft),
+    cover: row.cover ?? '',
+    is_private: dbBool(row.is_private),
+  };
+}
+
 function publicPostSummary(slug: string, meta: Partial<PostMeta>) {
   return {
     slug,
@@ -617,8 +653,19 @@ async function toggleLike(slug: string, request: Request, env: Env, origin: stri
 // ─── Post handlers ────────────────────────────────────────────────────────────
 
 async function listPosts(request: Request, env: Env, origin: string | null): Promise<Response> {
-  const { owner, repo, branch, token } = githubConfig(env);
   const isAdmin = await isAdminRequest(request, env);
+
+  if (contentBackend(env) === 'db') {
+    const rows = await env.DB.prepare(
+      isAdmin
+        ? `SELECT slug, title, description, date, category, tags, draft, cover, is_private FROM posts ORDER BY date DESC, created_at DESC`
+        : `SELECT slug, title, description, date, category, tags, draft, cover, is_private FROM posts WHERE draft = ? AND is_private = ? ORDER BY date DESC, created_at DESC`,
+    );
+    const result = isAdmin ? await rows.all<any>() : await rows.bind(false, false).all<any>();
+    return json((result.results ?? []).map(dbPostSummary), 200, origin);
+  }
+
+  const { owner, repo, branch, token } = githubConfig(env);
   try {
     const tree = await ghGet<{ tree: GHTreeItem[] }>(
       `repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, token,
@@ -654,9 +701,25 @@ async function readPostFile(slug: string, env: Env): Promise<{ file: GHFile; met
   return { file, meta, body };
 }
 
+async function readPostRow(slug: string, env: Env): Promise<any | null> {
+  return env.DB.prepare(
+    `SELECT slug, title, description, date, category, tags, draft, cover, is_private, password_hash, content FROM posts WHERE slug = ?`,
+  ).bind(slug).first<any>();
+}
+
 async function getPost(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
   if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
   const isAdmin = await isAdminRequest(request, env);
+
+  if (contentBackend(env) === 'db') {
+    const row = await readPostRow(slug, env);
+    if (!row) return json({ error: 'Post not found' }, 404, origin);
+    const summary = dbPostSummary(row);
+    if (summary.draft && !isAdmin) return json({ error: 'Post not found' }, 404, origin);
+    const content = summary.is_private && !isAdmin ? null : row.content;
+    return json({ ...summary, content }, 200, origin);
+  }
+
   try {
     const { file, meta, body } = await readPostFile(slug, env);
     if (meta.draft && !isAdmin) return json({ error: 'Post not found' }, 404, origin);
@@ -674,6 +737,18 @@ async function verifyPostPassword(slug: string, request: Request, env: Env, orig
   try { body = await request.json() as typeof body; } catch { return json({ error: 'Invalid JSON' }, 400, origin); }
   if (!body.password) return json({ error: 'Password required' }, 400, origin);
 
+  if (contentBackend(env) === 'db') {
+    const row = await readPostRow(slug, env);
+    if (!row) return json({ error: 'Post not found' }, 404, origin);
+    const summary = dbPostSummary(row);
+    if (summary.draft) return json({ error: 'Post not found' }, 404, origin);
+    if (!summary.is_private) return json({ ...summary, content: row.content }, 200, origin);
+    if (!row.password_hash || !(await checkPassword(body.password, row.password_hash))) {
+      return json({ error: 'Invalid password' }, 401, origin);
+    }
+    return json({ ...summary, content: row.content }, 200, origin);
+  }
+
   try {
     const { meta, body: content } = await readPostFile(slug, env);
     if (meta.draft) return json({ error: 'Post not found' }, 404, origin);
@@ -688,16 +763,55 @@ async function verifyPostPassword(slug: string, request: Request, env: Env, orig
   }
 }
 
+async function preparePrivateFields(payload: PostPayload, existingHash?: string): Promise<string | undefined> {
+  if (payload.is_private) {
+    if (payload.private_password) return hashPassword(payload.private_password);
+    if (existingHash) return existingHash;
+    throw new Error('private_password is required for private posts');
+  }
+  return undefined;
+}
+
 async function createPost(payload: PostPayload, env: Env, origin: string | null): Promise<Response> {
-  const { owner, repo, branch, token } = githubConfig(env);
   const slug = slugify(payload.title);
   if (!slug) return json({ error: 'Could not derive slug from title' }, 400, origin);
   if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
-  if (payload.is_private) {
-    if (!payload.private_password) return json({ error: 'private_password is required for private posts' }, 400, origin);
-    payload.password_hash = await hashPassword(payload.private_password);
-  } else {
-    payload.password_hash = undefined;
+
+  if (contentBackend(env) === 'db') {
+    try {
+      payload.password_hash = await preparePrivateFields(payload);
+    } catch (err) {
+      return json({ error: (err as Error).message }, 400, origin);
+    }
+
+    const existing = await env.DB.prepare('SELECT slug FROM posts WHERE slug = ?').bind(slug).first();
+    if (existing) return json({ error: `Post "${slug}" already exists` }, 409, origin);
+
+    await env.DB.prepare(`
+      INSERT INTO posts (slug, title, description, date, category, tags, draft, cover, is_private, password_hash, content, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      slug,
+      payload.title,
+      payload.description ?? '',
+      payload.date,
+      payload.category,
+      JSON.stringify(payload.tags ?? []),
+      !!payload.draft,
+      payload.cover ?? '',
+      !!payload.is_private,
+      payload.password_hash ?? null,
+      payload.content,
+      Math.floor(Date.now() / 1000),
+    ).run();
+    return json({ slug, message: 'Post created' }, 201, origin);
+  }
+
+  const { owner, repo, branch, token } = githubConfig(env);
+  try {
+    payload.password_hash = await preparePrivateFields(payload);
+  } catch (err) {
+    return json({ error: (err as Error).message }, 400, origin);
   }
 
   const filePath = `${CONTENT_PATH}/${slug}.md`;
@@ -714,6 +828,37 @@ async function createPost(payload: PostPayload, env: Env, origin: string | null)
 
 async function updatePost(slug: string, payload: PostPayload, env: Env, origin: string | null): Promise<Response> {
   if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+
+  if (contentBackend(env) === 'db') {
+    const existing = await readPostRow(slug, env);
+    if (!existing) return json({ error: 'Post not found' }, 404, origin);
+    try {
+      payload.password_hash = await preparePrivateFields(payload, existing.password_hash ?? undefined);
+    } catch (err) {
+      return json({ error: (err as Error).message }, 400, origin);
+    }
+
+    await env.DB.prepare(`
+      UPDATE posts
+      SET title = ?, description = ?, date = ?, category = ?, tags = ?, draft = ?, cover = ?, is_private = ?, password_hash = ?, content = ?, updated_at = ?
+      WHERE slug = ?
+    `).bind(
+      payload.title,
+      payload.description ?? '',
+      payload.date,
+      payload.category,
+      JSON.stringify(payload.tags ?? []),
+      !!payload.draft,
+      payload.cover ?? '',
+      !!payload.is_private,
+      payload.password_hash ?? null,
+      payload.content,
+      Math.floor(Date.now() / 1000),
+      slug,
+    ).run();
+    return json({ slug, message: 'Post updated' }, 200, origin);
+  }
+
   const { owner, repo, branch, token } = githubConfig(env);
   const filePath = `${CONTENT_PATH}/${slug}.md`;
   let currentSha: string;
@@ -725,13 +870,10 @@ async function updatePost(slug: string, payload: PostPayload, env: Env, origin: 
   } catch (err) {
     return json({ error: `Post not found: ${err}` }, 404, origin);
   }
-  if (payload.is_private) {
-    payload.password_hash = payload.private_password
-      ? await hashPassword(payload.private_password)
-      : currentMeta.password_hash;
-    if (!payload.password_hash) return json({ error: 'private_password is required for private posts' }, 400, origin);
-  } else {
-    payload.password_hash = undefined;
+  try {
+    payload.password_hash = await preparePrivateFields(payload, currentMeta.password_hash);
+  } catch (err) {
+    return json({ error: (err as Error).message }, 400, origin);
   }
   const encoded = btoa(unescape(encodeURIComponent(buildMarkdown(payload, payload.content))));
   const res = await ghPut(`repos/${owner}/${repo}/contents/${filePath}`, { message: `chore: update post "${payload.title}"`, content: encoded, sha: currentSha, branch }, token);
@@ -741,6 +883,14 @@ async function updatePost(slug: string, payload: PostPayload, env: Env, origin: 
 
 async function deletePost(slug: string, env: Env, origin: string | null): Promise<Response> {
   if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+
+  if (contentBackend(env) === 'db') {
+    const existing = await env.DB.prepare('SELECT slug FROM posts WHERE slug = ?').bind(slug).first();
+    if (!existing) return json({ error: 'Post not found' }, 404, origin);
+    await env.DB.prepare('DELETE FROM posts WHERE slug = ?').bind(slug).run();
+    return json({ slug, message: 'Post deleted' }, 200, origin);
+  }
+
   const { owner, repo, branch, token } = githubConfig(env);
   const filePath = `${CONTENT_PATH}/${slug}.md`;
   let currentSha: string;
@@ -873,6 +1023,11 @@ async function uploadImage(request: Request, env: Env, origin: string | null): P
   const file = fileEntry as File;
   if (!file.type.startsWith('image/')) return json({ error: 'Only image uploads are allowed' }, 400, origin);
   if (file.size > 5 * 1024 * 1024) return json({ error: 'File too large (max 5MB)' }, 400, origin);
+
+  if (env.UPLOADS) {
+    const url = await env.UPLOADS.put(file, request);
+    return json({ url }, 201, origin);
+  }
 
   const ext = (file.name.split('.').pop() || 'bin').replace(/[^\w-]/g, '').toLowerCase().slice(0, 8) || 'bin';
   const safeName = file.name.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-|-$/g, '').slice(0, 40) || 'image';
