@@ -263,6 +263,8 @@ const env = {
   GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
   ADMIN_PASSWORD: requiredEnv('ADMIN_PASSWORD'),
   JWT_SECRET: requiredEnv('JWT_SECRET'),
+  ADMIN_EMAIL: process.env.ADMIN_EMAIL,
+  ADMIN_LOGIN_EMAILS: process.env.ADMIN_LOGIN_EMAILS,
   GITHUB_OWNER: process.env.GITHUB_OWNER,
   GITHUB_REPO: process.env.GITHUB_REPO,
   GITHUB_BRANCH: process.env.GITHUB_BRANCH,

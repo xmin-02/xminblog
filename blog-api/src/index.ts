@@ -31,6 +31,8 @@ export interface Env {
   ADMIN_PASSWORD: string;
   JWT_SECRET: string;
   DB: D1Database;
+  ADMIN_EMAIL?: string;
+  ADMIN_LOGIN_EMAILS?: string;
   GITHUB_OWNER?: string;
   GITHUB_REPO?: string;
   GITHUB_BRANCH?: string;
@@ -43,7 +45,30 @@ export interface Env {
 const ALLOWED_ORIGIN = 'https://xmin.blog';
 const CONTENT_PATH = 'src/content/blog';
 const JWT_EXPIRY_SECS = 60 * 60 * 24 * 7; // 7 days
-const ADMIN_EMAIL = 'admin@xmin.blog';
+const DEFAULT_ADMIN_EMAIL = 'admin@xmin.blog';
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function adminPrimaryEmail(env: Env): string {
+  return normalizeEmail(env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL);
+}
+
+function adminLoginEmails(env: Env): string[] {
+  const emails = [
+    adminPrimaryEmail(env),
+    DEFAULT_ADMIN_EMAIL,
+    ...(env.ADMIN_LOGIN_EMAILS || '').split(','),
+  ]
+    .map(email => normalizeEmail(email))
+    .filter(Boolean);
+  return Array.from(new Set(emails));
+}
+
+function isAdminLoginEmail(email: string, env: Env): boolean {
+  return adminLoginEmails(env).includes(normalizeEmail(email));
+}
 
 // Best-effort in-memory throttling. This is intentionally local-process/local-isolate
 // only; put nginx/Cloudflare rate limiting in front of the home server for hard limits.
@@ -401,11 +426,14 @@ async function requireAdminRequest(request: Request, env: Env, origin: string | 
 }
 
 async function ensureAdminUserId(env: Env): Promise<number> {
-  const adminRow = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(ADMIN_EMAIL).first<{ id: number }>();
-  if (adminRow) return adminRow.id;
+  const primaryEmail = adminPrimaryEmail(env);
+  for (const email of adminLoginEmails(env)) {
+    const adminRow = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first<{ id: number }>();
+    if (adminRow) return adminRow.id;
+  }
   const inserted = await env.DB.prepare(
     'INSERT INTO users (email, password_hash, nickname, role) VALUES (?, ?, ?, ?) RETURNING id',
-  ).bind(ADMIN_EMAIL, 'admin-jwt', 'xmin', 'admin').first<{ id: number }>();
+  ).bind(primaryEmail, 'admin-jwt', 'xmin', 'admin').first<{ id: number }>();
   if (!inserted) throw new Error('Failed to create admin user row');
   return inserted.id;
 }
@@ -424,7 +452,7 @@ async function handleSignup(request: Request, env: Env, origin: string | null): 
   if (!email || !password) return json({ error: 'email and password required' }, 400, origin);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Invalid email' }, 400, origin);
   if (password.length < 8) return json({ error: 'Password must be at least 8 characters' }, 400, origin);
-  if (email === ADMIN_EMAIL) return json({ error: 'Email not available' }, 409, origin);
+  if (isAdminLoginEmail(email, env)) return json({ error: 'Email not available' }, 409, origin);
 
   const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
   if (existing) return json({ error: 'Email already registered' }, 409, origin);
@@ -452,14 +480,15 @@ async function handleLogin(request: Request, env: Env, origin: string | null): P
   if (!email || !password) return json({ error: 'email and password required' }, 400, origin);
 
   // Special admin login
-  if (email === ADMIN_EMAIL) {
+  if (isAdminLoginEmail(email, env)) {
     const ok = await verifyAdminPassword(password, env);
     if (!ok) return json({ error: 'Invalid credentials' }, 401, origin);
+    const adminEmail = adminPrimaryEmail(env);
     const token = await signJWT(
-      { sub: 0, email: ADMIN_EMAIL, role: 'admin', exp: Math.floor(Date.now() / 1000) + JWT_EXPIRY_SECS },
+      { sub: 0, email: adminEmail, role: 'admin', exp: Math.floor(Date.now() / 1000) + JWT_EXPIRY_SECS },
       env.JWT_SECRET,
     );
-    return json({ token, user: { id: 0, email: ADMIN_EMAIL, nickname: 'xmin', role: 'admin' } }, 200, origin);
+    return json({ token, user: { id: 0, email: adminEmail, nickname: 'xmin', role: 'admin' } }, 200, origin);
   }
 
   const user = await env.DB.prepare(
@@ -482,7 +511,7 @@ async function handleMe(request: Request, env: Env, origin: string | null): Prom
   if (!user) return json({ error: 'Unauthorized' }, 401, origin);
 
   if (user.sub === 0) {
-    return json({ id: 0, email: ADMIN_EMAIL, nickname: 'xmin', role: 'admin' }, 200, origin);
+    return json({ id: 0, email: adminPrimaryEmail(env), nickname: 'xmin', role: 'admin' }, 200, origin);
   }
 
   const row = await env.DB.prepare(
