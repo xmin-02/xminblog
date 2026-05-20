@@ -43,6 +43,7 @@ export interface Env {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ALLOWED_ORIGIN = 'https://xmin.blog';
+const SITE = 'https://xmin.blog';
 const CONTENT_PATH = 'src/content/blog';
 const JWT_EXPIRY_SECS = 60 * 60 * 24 * 7; // 7 days
 const DEFAULT_ADMIN_EMAIL = 'admin@xmin.blog';
@@ -93,6 +94,26 @@ function json(data: unknown, status = 200, origin: string | null = null): Respon
     status,
     headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
   });
+}
+
+function xml(data: string, contentType: string, origin: string | null = null): Response {
+  return new Response(data, {
+    status: 200,
+    headers: {
+      'Content-Type': `${contentType}; charset=utf-8`,
+      'Cache-Control': 'public, max-age=300',
+      ...corsHeaders(origin),
+    },
+  });
+}
+
+function escapeXml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
 function clientIp(request: Request): string {
@@ -737,6 +758,98 @@ async function listPosts(request: Request, env: Env, origin: string | null): Pro
   }
 }
 
+type PublicMetaPost = {
+  slug: string;
+  title: string;
+  description: string;
+  date: string;
+  updated_at?: number | string | null;
+};
+
+async function listPublicMetaPosts(env: Env, origin: string | null): Promise<PublicMetaPost[]> {
+  if (contentBackend(env) === 'db') {
+    const result = await env.DB.prepare(`
+      SELECT slug, title, description, date, updated_at
+      FROM posts
+      WHERE draft = ? AND is_private = ?
+      ORDER BY date DESC, created_at DESC
+    `).bind(false, false).all<PublicMetaPost>();
+    return (result.results ?? []).map(post => ({
+      ...post,
+      description: post.description ?? '',
+      date: post.date ?? '',
+    }));
+  }
+
+  const res = await listPosts(new Request(`${SITE}/api/posts`), env, origin);
+  if (!res.ok) return [];
+  return await res.json() as PublicMetaPost[];
+}
+
+function postCanonicalUrl(slug: string): string {
+  return `${SITE}/post?slug=${encodeURIComponent(slug)}`;
+}
+
+function toRssDate(value: string | number | null | undefined): string {
+  const date = typeof value === 'number' ? new Date(value * 1000) : new Date(value || Date.now());
+  return Number.isNaN(date.getTime()) ? new Date().toUTCString() : date.toUTCString();
+}
+
+function toIsoDate(value: string | number | null | undefined): string {
+  const date = typeof value === 'number' ? new Date(value * 1000) : new Date(value || Date.now());
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
+
+async function getRssFeed(env: Env, origin: string | null): Promise<Response> {
+  const posts = await listPublicMetaPosts(env, origin);
+  const items = posts.map((post) => {
+    const url = postCanonicalUrl(post.slug);
+    return `    <item>
+      <title>${escapeXml(post.title)}</title>
+      <link>${escapeXml(url)}</link>
+      <guid isPermaLink="true">${escapeXml(url)}</guid>
+      <description>${escapeXml(post.description)}</description>
+      <pubDate>${escapeXml(toRssDate(post.date))}</pubDate>
+    </item>`;
+  }).join('\n');
+
+  return xml(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>xmin.blog</title>
+    <link>${SITE}/</link>
+    <description>xmin의 개인 블로그 — 보안, AI, 개발</description>
+    <language>ko</language>
+${items}
+  </channel>
+</rss>
+`, 'application/rss+xml', origin);
+}
+
+async function getSitemap(env: Env, origin: string | null): Promise<Response> {
+  const posts = await listPublicMetaPosts(env, origin);
+  const staticUrls = [
+    { loc: `${SITE}/`, priority: '1.0' },
+    { loc: `${SITE}/about/`, priority: '0.6' },
+  ];
+  const postUrls = posts.map(post => ({
+    loc: postCanonicalUrl(post.slug),
+    lastmod: toIsoDate(post.updated_at || post.date),
+    priority: '0.8',
+  }));
+  const urls = [...staticUrls, ...postUrls].map(url => `  <url>
+    <loc>${escapeXml(url.loc)}</loc>${'lastmod' in url ? `
+    <lastmod>${escapeXml(url.lastmod)}</lastmod>` : ''}
+    <priority>${url.priority}</priority>
+  </url>`).join('\n');
+
+  return xml(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>
+`, 'application/xml', origin);
+}
+
 async function readPostFile(slug: string, env: Env): Promise<{ file: GHFile; meta: Partial<PostMeta>; body: string }> {
   const { owner, repo, branch, token } = githubConfig(env);
   const filePath = `${CONTENT_PATH}/${slug}.md`;
@@ -1101,6 +1214,13 @@ export default {
 
     if (url.pathname === '/health' && method === 'GET') {
       return json({ ok: true }, 200, origin);
+    }
+
+    if ((url.pathname === '/api/rss.xml' || url.pathname === '/api/feed.xml') && method === 'GET') {
+      return getRssFeed(env, origin);
+    }
+    if (url.pathname === '/api/sitemap.xml' && method === 'GET') {
+      return getSitemap(env, origin);
     }
 
     // ── Auth routes ──────────────────────────────────────────────────────────

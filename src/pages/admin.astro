@@ -365,7 +365,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const pct = max > 0 ? (v / max) * 100 : 0;
       return `<div class="adm-row">
         <span class="adm-row-rank">${i + 1}.</span>
-        <a href="/post#${esc(r.post_slug)}" class="adm-row-title" title="${esc(r.title)}">${esc(r.title)}</a>
+        <a href="/post?slug=${encodeURIComponent(r.post_slug)}" class="adm-row-title" title="${esc(r.title)}">${esc(r.title)}</a>
         <span class="adm-row-bar-wrap"><span class="adm-row-bar" style="width:${pct}%"></span></span>
         <span class="adm-row-num">${fmtNum(v)}</span>
       </div>`;
@@ -396,7 +396,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       return `<div class="adm-comment">
         <div class="adm-comment-meta">
           <strong style="color:var(--color-text);">${esc(c.nickname || '익명')}</strong>
-          on <a class="adm-comment-link" href="/post#${esc(c.post_slug)}">${esc(c.post_slug)}</a>
+          on <a class="adm-comment-link" href="/post?slug=${encodeURIComponent(c.post_slug)}">${esc(c.post_slug)}</a>
           · ${esc(date)}
         </div>
         <p class="text-sm" style="color:var(--color-text);line-height:1.5;">${esc(preview)}${c.content && c.content.length > 80 ? '…' : ''}</p>

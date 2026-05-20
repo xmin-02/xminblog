@@ -754,8 +754,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   let _isNewPost = false;
 
+  function postUrl(slug) {
+    return `/post?slug=${encodeURIComponent(slug)}`;
+  }
+
+  function readRouteSlug() {
+    const hashSlug = window.location.hash ? decodeURIComponent(window.location.hash.slice(1)) : '';
+    if (hashSlug === 'new') return 'new';
+    const querySlug = new URLSearchParams(window.location.search).get('slug') || '';
+    return querySlug || hashSlug;
+  }
+
   async function loadPost() {
-    const slug = decodeURIComponent(window.location.hash.slice(1));
+    const slug = readRouteSlug();
     if (!slug) { window.location.href = '/'; return; }
 
     const container = document.getElementById('post-container');
@@ -832,8 +843,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
       const navHtml = (prev || next) ? `
         <div class="flex gap-3 mt-12">
-          ${prev ? `<a href="/post#${esc(prev.slug)}" class="post-nav-link"><span class="post-nav-label">← 이전 글</span><span class="post-nav-title">${esc(prev.title)}</span></a>` : '<div class="flex-1"></div>'}
-          ${next ? `<a href="/post#${esc(next.slug)}" class="post-nav-link" style="text-align:right;"><span class="post-nav-label">다음 글 →</span><span class="post-nav-title">${esc(next.title)}</span></a>` : '<div class="flex-1"></div>'}
+          ${prev ? `<a href="${postUrl(prev.slug)}" class="post-nav-link"><span class="post-nav-label">← 이전 글</span><span class="post-nav-title">${esc(prev.title)}</span></a>` : '<div class="flex-1"></div>'}
+          ${next ? `<a href="${postUrl(next.slug)}" class="post-nav-link" style="text-align:right;"><span class="post-nav-label">다음 글 →</span><span class="post-nav-title">${esc(next.title)}</span></a>` : '<div class="flex-1"></div>'}
         </div>` : '';
 
       container.innerHTML = `
@@ -932,7 +943,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         const recent = allPosts.filter(p => p.slug !== slug).slice(0, 5);
         recentEl.innerHTML = recent.map(p => {
           const d = p.date ? new Date(p.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
-          return `<li><a href="/post#${esc(p.slug)}" class="block group">
+          return `<li><a href="${postUrl(p.slug)}" class="block group">
             <p class="text-xs font-medium text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors line-clamp-2 leading-snug">${esc(p.title)}</p>
             <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">${esc(d)}</p>
           </a></li>`;
@@ -1449,7 +1460,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         _isNewPost = false;
         _currentSlug = data.slug;
         setTimeout(() => {
-          window.location.hash = data.slug;
+          window.history.replaceState(null, '', postUrl(data.slug));
           const cs = document.getElementById('comments-section');
           if (cs) cs.style.display = '';
           loadPost();

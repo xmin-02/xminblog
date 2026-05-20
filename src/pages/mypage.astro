@@ -296,11 +296,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         const priv = p.is_private ? '<span class="mp-priv">[private]</span>' : '';
         return `<div class="mp-row flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
-            <a href="/post#${esc(p.slug)}" class="mp-link text-sm">${esc(p.title)}</a>${draft}${priv}
+            <a href="/post?slug=${encodeURIComponent(p.slug)}" class="mp-link text-sm">${esc(p.title)}</a>${draft}${priv}
             <p class="mp-meta mt-0.5">${esc(date)} · [${esc(p.category)}] · ${esc(p.slug)}</p>
           </div>
           <div class="flex gap-1 flex-shrink-0">
-            <a href="/post#${esc(p.slug)}" class="mp-del-btn" style="color:var(--color-accent);">편집</a>
+            <a href="/post?slug=${encodeURIComponent(p.slug)}" class="mp-del-btn" style="color:var(--color-accent);">편집</a>
             <button class="mp-del-btn" onclick="mpDeletePost('${esc(p.slug)}')">삭제</button>
           </div>
         </div>`;
@@ -336,7 +336,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         const date = new Date(Number(c.created_at) * 1000).toLocaleString('ko-KR');
         return `<div class="mp-row" id="mp-c-${c.id}">
           <div class="flex items-start justify-between gap-2 mb-1">
-            <a href="/post#${esc(c.post_slug)}" class="mp-link text-xs">/post#${esc(c.post_slug)}</a>
+            <a href="/post?slug=${encodeURIComponent(c.post_slug)}" class="mp-link text-xs">/post?slug=${encodeURIComponent(c.post_slug)}</a>
             <button class="mp-del-btn" onclick="mpDeleteComment(${c.id})">삭제</button>
           </div>
           <p class="text-sm leading-relaxed" style="color:var(--color-text);">${esc(c.content)}</p>
