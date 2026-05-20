@@ -477,10 +477,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   function buildToc(container) {
     const headings = container.querySelectorAll('h2, h3');
-    if (headings.length < 2) return;
     const tocWidget = document.getElementById('toc-widget');
     const tocNav = document.getElementById('toc-nav');
     if (!tocWidget || !tocNav) return;
+    tocNav.innerHTML = '';
+    tocWidget.style.display = 'none';
+    if (headings.length < 2) return;
     tocWidget.style.display = '';
     let idCounter = 0;
     const links = [];
@@ -677,14 +679,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const slug = decodeURIComponent(window.location.hash.slice(1));
     if (!slug) { window.location.href = '/'; return; }
 
+    const container = document.getElementById('post-container');
+    const commentsSection = document.getElementById('comments-section');
+    const tocWidget = document.getElementById('toc-widget');
+    const tocNav = document.getElementById('toc-nav');
+    if (tocWidget) tocWidget.style.display = 'none';
+    if (tocNav) tocNav.innerHTML = '';
+    if (commentsSection) commentsSection.classList.add('hidden');
+    document.getElementById('comment-form-area')?.replaceChildren();
+    document.getElementById('comment-list')?.replaceChildren();
+    container.innerHTML = `
+      <div class="text-center py-20 text-[var(--color-text-secondary)]" id="post-loading">
+        <div class="inline-block w-6 h-6 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p class="text-sm">글을 불러오는 중...</p>
+      </div>`;
+
     if (slug === 'new') {
       _isNewPost = true;
       _currentSlug = '';
       _currentPost = { title: '', description: '', content: '', category: '', tags: [], date: new Date().toISOString().slice(0, 10), draft: false, cover: '', is_private: false };
       document.title = '새 글 작성 — xmin.blog';
-      const container = document.getElementById('post-container');
       container.innerHTML = '<article></article>';
-      const commentsSection = document.getElementById('comments-section');
       if (commentsSection) commentsSection.style.display = 'none';
       enterEditMode();
       return;
@@ -692,8 +707,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     _isNewPost = false;
     _currentSlug = slug;
-
-    const container = document.getElementById('post-container');
 
     try {
       const token = localStorage.getItem('auth_token');
@@ -706,7 +719,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       if (!postRes.ok) throw new Error('Post not found');
       const post = await postRes.json();
       _currentPost = post;
-      const allPosts = allRes.ok ? (await allRes.json()).filter(p => !p.draft) : [];
+      const allPosts = allRes.ok ? (await allRes.json()).filter(p => !p.draft && !p.is_private) : [];
 
       // Private post: try cached password first
       if (post.is_private && post.content == null) {
@@ -748,7 +761,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           ${post.cover ? `<div class="post-cover"><img src="${esc(post.cover)}" alt="${esc(post.title)}" loading="eager" /></div>` : ''}
           <header class="mb-10 pb-8 border-b border-[var(--color-border)]">
             <div class="flex flex-wrap items-center gap-2 mb-4" style="font-family: var(--font-mono);">
-              ${post.category ? `<a href="/?category=${esc(post.category)}" class="text-xs font-medium transition-colors" style="color:var(--color-accent);">[${esc(post.category)}]</a>` : ''}
+              ${post.category ? `<a href="/?category=${encodeURIComponent(post.category)}" class="text-xs font-medium transition-colors" style="color:var(--color-accent);">[${esc(post.category)}]</a>` : ''}
               <span class="text-xs text-[var(--color-text-secondary)]">${esc(date)}</span>
             </div>
             <h1 class="text-2xl sm:text-3xl font-bold leading-snug mb-4 tracking-tight" style="font-family:var(--font-display);color:var(--color-text);">${esc(post.title)}</h1>
@@ -1231,6 +1244,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
   }
 
+  window.addEventListener('hashchange', loadPost);
   loadPost();
 </script>
 

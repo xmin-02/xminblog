@@ -6,9 +6,18 @@ import '../styles/global.css';
 interface Props {
   title: string;
   description?: string;
+  canonical?: string;
+  noindex?: boolean;
+  ogType?: string;
 }
 
-const { title, description = 'xmin의 개인 블로그 — 보안, AI, 개발' } = Astro.props;
+const {
+  title,
+  description = 'xmin의 개인 블로그 — 보안, AI, 개발',
+  canonical = new URL(Astro.url.pathname, 'https://xmin.blog').toString(),
+  noindex = false,
+  ogType = 'website',
+} = Astro.props;
 ---
 
 <!DOCTYPE html>
@@ -18,10 +27,12 @@ const { title, description = 'xmin의 개인 블로그 — 보안, AI, 개발' }
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <meta name="generator" content={Astro.generator} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <link rel="canonical" href={canonical} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://xmin.blog" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonical} />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />

@@ -292,7 +292,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const lockIcon = post.is_private ? `<svg class="inline-block w-3.5 h-3.5 align-[-2px] mr-1" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" style="color:#ca8a04;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>` : '';
       return `
         <div class="post-card-wrap">
-          <a href="/post#${esc(post.slug)}" class="post-card" data-category="${esc(post.category)}">
+          <a href="/blog/${encodeURIComponent(post.slug)}/" class="post-card" data-category="${esc(post.category)}">
             <div class="post-meta">
               ${post.category ? `<span class="post-cat">[${esc(post.category)}]</span>` : ''}
               <span>${esc(date)}</span>
@@ -352,12 +352,23 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     });
   }
 
+  function selectCategory(category, updateUrl = true) {
+    activeCategory = category || 'all';
+    if (updateUrl) {
+      const url = new URL(window.location.href);
+      if (activeCategory === 'all') url.searchParams.delete('category');
+      else url.searchParams.set('category', activeCategory);
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+    filterAndSearch();
+  }
+
   async function loadPosts() {
     try {
       const res = await fetch(`${API_BASE}/api/posts`);
       if (!res.ok) throw new Error('API error');
       const data = await res.json();
-      allPosts = data.filter(p => !p.draft);
+      allPosts = data.filter(p => !p.draft && !p.is_private);
 
       document.getElementById('loading')?.remove();
 
@@ -367,19 +378,20 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         if (p.category) catCounts[p.category] = (catCounts[p.category] || 0) + 1;
       });
       const cats = Object.keys(catCounts);
+      const requestedCategory = new URLSearchParams(window.location.search).get('category');
+      activeCategory = requestedCategory && catCounts[requestedCategory] ? requestedCategory : 'all';
 
       // Horizontal filter bar (top of main)
       const filterBar = document.getElementById('category-filter-bar');
       filterBar.innerHTML = ['전체', ...cats].map(cat => {
         const isAll = cat === '전체';
         const key = isAll ? 'all' : cat;
-        return `<button data-category="${esc(key)}" class="filter-btn shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all border border-[var(--color-border)] bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] whitespace-nowrap ${isAll ? 'active' : ''}">${esc(cat)}</button>`;
+        return `<button data-category="${esc(key)}" class="filter-btn shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all border border-[var(--color-border)] bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] whitespace-nowrap ${key === activeCategory ? 'active' : ''}">${esc(cat)}</button>`;
       }).join('');
 
       filterBar.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          activeCategory = btn.dataset.category;
-          filterAndSearch();
+          selectCategory(btn.dataset.category);
         });
       });
 
@@ -405,8 +417,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
       sidebarCats?.querySelectorAll('.cat-item').forEach(btn => {
         btn.addEventListener('click', () => {
-          activeCategory = btn.dataset.category;
-          filterAndSearch();
+          selectCategory(btn.dataset.category);
         });
       });
 
@@ -417,7 +428,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         recentEl.innerHTML = recent.map(p => {
           const date = p.date ? new Date(p.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
           return `<li>
-            <a href="/post#${esc(p.slug)}" class="block group">
+            <a href="/blog/${encodeURIComponent(p.slug)}/" class="block group">
               <p class="text-xs font-medium text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors line-clamp-2 leading-snug">${esc(p.title)}</p>
               <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">${esc(date)}</p>
             </a>
@@ -432,13 +443,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         filterAndSearch();
       });
 
-      renderPosts(allPosts);
+      filterAndSearch();
       initTerminal(allPosts);
 
     } catch (err) {
       const loading = document.getElementById('loading');
       if (loading) {
         loading.innerHTML = '<p class="text-sm">글을 불러오지 못했습니다.</p>';
+      }
+      const recentEl = document.getElementById('sidebar-recent');
+      if (recentEl) {
+        recentEl.innerHTML = '<li class="text-xs text-[var(--color-text-secondary)]">불러오기 실패</li>';
       }
       console.error(err);
     }

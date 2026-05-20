@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="로그인 — xmin.blog" description="xmin.blog 로그인 및 회원가입">
+<BaseLayout noindex={true} title="로그인 — xmin.blog" description="xmin.blog 로그인 및 회원가입">
   <div class="mx-auto max-w-md px-4 py-16">
     <div class="card">
       <!-- Logo -->
@@ -92,10 +92,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 <script is:inline>
   const API_BASE = 'https://api.xmin.blog';
 
-  // Redirect if already logged in
-  if (localStorage.getItem('auth_token')) {
-    window.location.href = '/';
-  }
+  // Redirect only after the stored token is verified.
+  (async function redirectIfSessionIsValid() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { window.location.href = '/'; return; }
+    } catch {}
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+  })();
 
   // Check if signup tab requested
   if (window.location.hash === '#signup') switchTab('signup');

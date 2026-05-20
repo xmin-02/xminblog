@@ -46,8 +46,9 @@ const ADMIN_EMAIL = 'admin@xmin.blog';
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 
 function corsHeaders(origin: string | null): Record<string, string> {
+  const isLocalDevOrigin = !!origin && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
   const allowed =
-    origin === ALLOWED_ORIGIN || origin === 'http://localhost:4321' ? origin : ALLOWED_ORIGIN;
+    origin === ALLOWED_ORIGIN || isLocalDevOrigin ? origin : ALLOWED_ORIGIN;
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -328,6 +329,20 @@ async function isAdminRequest(request: Request, env: Env): Promise<boolean> {
   return authUser?.role === 'admin';
 }
 
+async function ensureAdminUserId(env: Env): Promise<number> {
+  const adminRow = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(ADMIN_EMAIL).first<{ id: number }>();
+  if (adminRow) return adminRow.id;
+  const inserted = await env.DB.prepare(
+    'INSERT INTO users (email, password_hash, nickname, role) VALUES (?, ?, ?, ?) RETURNING id',
+  ).bind(ADMIN_EMAIL, 'admin-jwt', 'xmin', 'admin').first<{ id: number }>();
+  if (!inserted) throw new Error('Failed to create admin user row');
+  return inserted.id;
+}
+
+async function getDbUserIdForAuth(user: JWTPayload, env: Env): Promise<number> {
+  return user.sub === 0 ? ensureAdminUserId(env) : user.sub;
+}
+
 // ─── Auth handlers ────────────────────────────────────────────────────────────
 
 async function handleSignup(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -456,11 +471,7 @@ async function getMyComments(request: Request, env: Env, origin: string | null):
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: 'Unauthorized' }, 401, origin);
 
-  let userId = user.sub;
-  if (user.sub === 0) {
-    const adminRow = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(ADMIN_EMAIL).first<{ id: number }>();
-    userId = adminRow?.id ?? 0;
-  }
+  const userId = await getDbUserIdForAuth(user, env);
 
   const rows = await env.DB.prepare(`
     SELECT id, post_slug, content, created_at
@@ -476,6 +487,7 @@ async function getMyComments(request: Request, env: Env, origin: string | null):
 // ─── Comments handlers ────────────────────────────────────────────────────────
 
 async function getComments(slug: string, env: Env, origin: string | null): Promise<Response> {
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
   const rows = await env.DB.prepare(`
     SELECT c.id, c.content, c.created_at, u.nickname, u.id as user_id
     FROM comments c JOIN users u ON c.user_id = u.id
@@ -487,6 +499,7 @@ async function getComments(slug: string, env: Env, origin: string | null): Promi
 }
 
 async function addComment(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: 'Login required to comment' }, 401, origin);
 
@@ -497,7 +510,7 @@ async function addComment(slug: string, request: Request, env: Env, origin: stri
   if (!content || content.length < 1) return json({ error: 'Comment cannot be empty' }, 400, origin);
   if (content.length > 1000) return json({ error: 'Comment too long (max 1000 chars)' }, 400, origin);
 
-  // Resolve user_id: admin (sub=0) is stored lazily in the DB on first comment
+  // Resolve user_id: admin (sub=0) is stored lazily in the DB on first use
   let userId = user.sub;
   let nickname = 'xmin';
   if (user.sub !== 0) {
@@ -505,16 +518,7 @@ async function addComment(slug: string, request: Request, env: Env, origin: stri
     if (!row) return json({ error: 'User not found' }, 404, origin);
     nickname = row.nickname;
   } else {
-    // Ensure admin has a DB row (created on first use, let AUTOINCREMENT assign id)
-    const adminRow = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(ADMIN_EMAIL).first<{ id: number }>();
-    if (!adminRow) {
-      const inserted = await env.DB.prepare(
-        'INSERT INTO users (email, password_hash, nickname, role) VALUES (?, ?, ?, ?) RETURNING id',
-      ).bind(ADMIN_EMAIL, 'admin-jwt', 'xmin', 'admin').first<{ id: number }>();
-      userId = inserted?.id ?? 1;
-    } else {
-      userId = adminRow.id;
-    }
+    userId = await ensureAdminUserId(env);
   }
 
   const result = await env.DB.prepare(
@@ -543,13 +547,15 @@ async function deleteComment(id: number, request: Request, env: Env, origin: str
 // ─── Likes handlers ───────────────────────────────────────────────────────────
 
 async function getLikes(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
   const countRow = await env.DB.prepare('SELECT COUNT(*) as count FROM likes WHERE post_slug = ?').bind(slug).first<{ count: number }>();
   const count = countRow?.count ?? 0;
 
   const user = await getAuthUser(request, env);
   let liked = false;
   if (user) {
-    const row = await env.DB.prepare('SELECT id FROM likes WHERE post_slug = ? AND user_id = ?').bind(slug, user.sub).first();
+    const userId = await getDbUserIdForAuth(user, env);
+    const row = await env.DB.prepare('SELECT id FROM likes WHERE post_slug = ? AND user_id = ?').bind(slug, userId).first();
     liked = !!row;
   }
 
@@ -557,14 +563,16 @@ async function getLikes(slug: string, request: Request, env: Env, origin: string
 }
 
 async function toggleLike(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
+  if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: 'Login required to like' }, 401, origin);
 
-  const existing = await env.DB.prepare('SELECT id FROM likes WHERE post_slug = ? AND user_id = ?').bind(slug, user.sub).first();
+  const userId = await getDbUserIdForAuth(user, env);
+  const existing = await env.DB.prepare('SELECT id FROM likes WHERE post_slug = ? AND user_id = ?').bind(slug, userId).first();
   if (existing) {
-    await env.DB.prepare('DELETE FROM likes WHERE post_slug = ? AND user_id = ?').bind(slug, user.sub).run();
+    await env.DB.prepare('DELETE FROM likes WHERE post_slug = ? AND user_id = ?').bind(slug, userId).run();
   } else {
-    await env.DB.prepare('INSERT INTO likes (post_slug, user_id) VALUES (?, ?)').bind(slug, user.sub).run();
+    await env.DB.prepare('INSERT INTO likes (post_slug, user_id) VALUES (?, ?)').bind(slug, userId).run();
   }
 
   const countRow = await env.DB.prepare('SELECT COUNT(*) as count FROM likes WHERE post_slug = ?').bind(slug).first<{ count: number }>();
@@ -595,11 +603,11 @@ async function listPosts(request: Request, env: Env, origin: string | null): Pro
         }
       }),
     );
-    const visiblePosts = isAdmin ? posts : posts.filter(post => !post.draft);
+    const visiblePosts = isAdmin ? posts : posts.filter(post => !post.draft && !post.is_private);
     visiblePosts.sort((a, b) => (b.date > a.date ? 1 : -1));
     return json(visiblePosts, 200, origin);
   } catch (err) {
-    return json({ error: String(err) }, 500, origin);
+    return json({ error: 'Failed to load posts' }, 500, origin);
   }
 }
 
@@ -621,7 +629,7 @@ async function getPost(slug: string, request: Request, env: Env, origin: string 
     return json({ ...publicPostSummary(slug, meta), content, sha: isAdmin ? file.sha : undefined }, 200, origin);
   } catch (err) {
     const msg = String(err);
-    return json({ error: msg }, msg.includes('404') ? 404 : 500, origin);
+    return json({ error: 'Post not found' }, msg.includes('404') ? 404 : 500, origin);
   }
 }
 
@@ -641,7 +649,7 @@ async function verifyPostPassword(slug: string, request: Request, env: Env, orig
     return json({ ...publicPostSummary(slug, meta), content }, 200, origin);
   } catch (err) {
     const msg = String(err);
-    return json({ error: msg }, msg.includes('404') ? 404 : 500, origin);
+    return json({ error: 'Post not found' }, msg.includes('404') ? 404 : 500, origin);
   }
 }
 
@@ -853,6 +861,10 @@ export default {
 
     if (method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    }
+
+    if (url.pathname === '/health' && method === 'GET') {
+      return json({ ok: true }, 200, origin);
     }
 
     // ── Auth routes ──────────────────────────────────────────────────────────

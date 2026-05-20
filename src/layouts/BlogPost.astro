@@ -9,13 +9,14 @@ interface Props {
     category: string;
     tags: string[];
   };
+  canonical?: string;
 }
 
-const { frontmatter } = Astro.props;
+const { frontmatter, canonical } = Astro.props;
 const formattedDate = frontmatter.date.toISOString().split('T')[0];
 ---
 
-<BaseLayout title={`${frontmatter.title} — xmin.blog`} description={frontmatter.description}>
+<BaseLayout title={`${frontmatter.title} — xmin.blog`} description={frontmatter.description} canonical={canonical} ogType="article">
   <article class="mx-auto max-w-3xl px-6 py-16">
     <header class="mb-12">
       <div class="flex items-center gap-3 mb-4">

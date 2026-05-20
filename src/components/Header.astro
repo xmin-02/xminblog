@@ -151,10 +151,19 @@ const pathname = Astro.url.pathname;
         userMenu.style.display = '';
         const avatarEl = document.getElementById('auth-avatar');
         const display = user.nickname || (user.email ? user.email.split('@')[0] : '?');
+        avatarEl.textContent = '';
+        const fallback = (display[0] || '?').toUpperCase();
         if (user.avatar_url) {
-          avatarEl.innerHTML = `<img src="${user.avatar_url}" alt="" class="w-full h-full object-cover" onerror="this.parentNode.textContent='${(display[0]||'?').toUpperCase()}'" />`;
+          const img = document.createElement('img');
+          img.src = user.avatar_url;
+          img.alt = '';
+          img.className = 'w-full h-full object-cover';
+          img.addEventListener('error', () => {
+            avatarEl.textContent = fallback;
+          }, { once: true });
+          avatarEl.appendChild(img);
         } else {
-          avatarEl.textContent = (display[0] || '?').toUpperCase();
+          avatarEl.textContent = fallback;
         }
         document.getElementById('auth-nickname').textContent = display;
         document.getElementById('dd-nickname').textContent = display;

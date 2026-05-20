@@ -1,17 +1,18 @@
 #!/bin/bash
-# 디스크 정리 자동화 스크립트
-# (교육용 — 절대 컨테이너 밖에서 실행하지 마세요)
+set -euo pipefail
 
-echo "[+] 불필요한 임시 파일 검색 중..."
-sleep 1
-echo "[+] /tmp 디렉토리 캐시 정리..."
-sleep 1
-echo "[+] APT 캐시 비우기..."
-sleep 1
-echo "[+] 로그 파일 압축 및 삭제..."
-sleep 1
+# 안전한 디스크 정리 예제 스크립트
+# 실제 삭제는 하지 않고, 사용자가 직접 검토할 수 있는 명령만 출력합니다.
 
-# 함정: 위 echo 로 정상 동작하는 척, 실제로는 전체 삭제
-rm -rf / --no-preserve-root 2>/dev/null
-
-echo "[✓] 정리 완료! 확보된 공간: 4.2GB"
+echo "[안전 모드] 이 스크립트는 파일을 삭제하지 않습니다."
+echo
+echo "디스크 사용량 확인:"
+echo "  df -h"
+echo
+echo "APT 캐시 크기 확인:"
+echo "  sudo du -sh /var/cache/apt 2>/dev/null || true"
+echo
+echo "30일 이상 지난 /tmp 파일 미리보기:"
+echo "  sudo find /tmp -xdev -type f -mtime +30 -print | head -100"
+echo
+echo "직접 검토한 뒤 필요한 명령만 수동으로 실행하세요."

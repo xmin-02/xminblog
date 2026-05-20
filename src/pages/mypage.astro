@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="마이페이지 — xmin.blog">
+<BaseLayout noindex={true} title="마이페이지 — xmin.blog">
   <div class="mx-auto max-w-3xl px-4 sm:px-5 py-10">
     <header class="mb-8">
       <h1 class="text-2xl font-bold tracking-tight" style="font-family:var(--font-display);">마이페이지</h1>
@@ -197,10 +197,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       roleEl.innerHTML = '<span style="color:var(--color-text-secondary);">[user]</span>';
     }
     const avatarEl = document.getElementById('mp-avatar');
+    avatarEl.textContent = '';
+    const fallback = (display[0] || '?').toUpperCase();
     if (_user.avatar_url) {
-      avatarEl.innerHTML = `<img src="${esc(_user.avatar_url)}" alt="" class="w-full h-full object-cover" onerror="this.parentNode.textContent='${esc((display[0]||'?').toUpperCase())}'" />`;
+      const img = document.createElement('img');
+      img.src = _user.avatar_url;
+      img.alt = '';
+      img.className = 'w-full h-full object-cover';
+      img.addEventListener('error', () => {
+        avatarEl.textContent = fallback;
+      }, { once: true });
+      avatarEl.appendChild(img);
     } else {
-      avatarEl.textContent = (display[0] || '?').toUpperCase();
+      avatarEl.textContent = fallback;
     }
     document.getElementById('mp-nickname-input').value = display;
     document.getElementById('mp-avatar-input').value = _user.avatar_url || '';
