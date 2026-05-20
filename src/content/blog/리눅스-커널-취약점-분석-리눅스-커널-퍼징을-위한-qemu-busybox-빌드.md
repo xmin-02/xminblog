@@ -25,7 +25,7 @@ sudo apt install qemu-utils qemu-system-x86 qemu-kvm
 
 ## BusyBox 빌드
 
-![BusyBox 다운로드 페이지](https://blog.kakaocdn.net/dna/chuty9/dJMcacaj5dl/AAAAAAAAAAAAAAAAAAAAAJ9HaP3XbEU0ypCknQq1Cp9gQdYDZUAVWpvAQP1IJdVb/img.png?credential=yqXZFxpELC7KVnFOS48ylbz2pIh7yKj8&expires=1777561199)
+![BusyBox 다운로드 페이지](https://api.xmin.cloud/uploads/tistory-리눅스-커널-취약점-분석-리눅스-커널-퍼징을-위한-qemu-busybox-빌드-01-5b5e0dc4968f.png)
 
 ```bash
 cd /usr/src/kernel
@@ -46,7 +46,7 @@ sudo apt install -y libncurses-dev libnl-3-dev libnl-genl-3-dev linux-headers-$(
 sudo make CONFIG_PREFIX=../result install
 ```
 
-![BusyBox 빌드 출력](https://blog.kakaocdn.net/dna/3SFkq/dJMcaaXSCcK/AAAAAAAAAAAAAAAAAAAAAIL4A5VXv6PzouEpp17CfrxJI8f8CEB7duwQk3li9unC/img.png?credential=yqXZFxpELC7KVnFOS48ylbz2pIh7yKj8&expires=1777561199)
+![BusyBox 빌드 출력](https://api.xmin.cloud/uploads/tistory-리눅스-커널-취약점-분석-리눅스-커널-퍼징을-위한-qemu-busybox-빌드-02-a781306579e2.png)
 
 busybox 빌드 출력이 성공하면 계속 진행:
 
@@ -107,7 +107,7 @@ qemu-system-x86_64 \
 -s
 ```
 
-![QEMU 실행 성공](https://blog.kakaocdn.net/dna/u6WyR/dJMcaiVUFZT/AAAAAAAAAAAAAAAAAAAAAG3S2Upg2wx5Jyld945UsheE2LD7cLTzNLugtmm3xr3e/img.png?credential=yqXZFxpELC7KVnFOS48ylbz2pIh7yKj8&expires=1777561199)
+![QEMU 실행 성공](https://api.xmin.cloud/uploads/tistory-리눅스-커널-취약점-분석-리눅스-커널-퍼징을-위한-qemu-busybox-빌드-03-5cb53854d05f.png)
 
 저런 라인이 뜬다면 잘 실행 된 것이다. exit를 입력해 종료하자.
 
