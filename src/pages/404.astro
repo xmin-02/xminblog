@@ -12,11 +12,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 </BaseLayout>
 
 <script is:inline>
-  // DB-backed posts are rendered by /post?slug=slug. If an old/static-style
+  // DB-backed posts are rendered by /post/?slug=slug. If an old/static-style
   // /blog/slug/ link points to a post that is not part of the static build,
   // recover the reader instead of leaving them on a dead 404 page.
   const match = window.location.pathname.match(/^\/blog\/(.+?)\/?$/);
   if (match?.[1]) {
-    window.location.replace(`/post?slug=${match[1]}`);
+    window.location.replace(`/post/?slug=${match[1]}`);
   }
 </script>

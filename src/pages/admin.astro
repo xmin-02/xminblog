@@ -385,7 +385,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const pct = max > 0 ? (v / max) * 100 : 0;
       return `<div class="adm-row">
         <span class="adm-row-rank">${i + 1}.</span>
-        <a href="/post?slug=${encodeURIComponent(r.post_slug)}" class="adm-row-title" title="${esc(r.title)}">${esc(r.title)}</a>
+        <a href="/post/?slug=${encodeURIComponent(r.post_slug)}" class="adm-row-title" title="${esc(r.title)}">${esc(r.title)}</a>
         <span class="adm-row-bar-wrap"><span class="adm-row-bar" style="width:${pct}%"></span></span>
         <span class="adm-row-num">${fmtNum(v)}</span>
       </div>`;
@@ -417,7 +417,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div class="adm-comment-meta" style="display:flex;align-items:center;gap:0.45rem;justify-content:space-between;">
           <span class="min-w-0">
             <strong style="color:var(--color-text);">${esc(c.nickname || '익명')}</strong>
-            on <a class="adm-comment-link" href="/post?slug=${encodeURIComponent(c.post_slug)}">${esc(c.post_slug)}</a>
+            on <a class="adm-comment-link" href="/post/?slug=${encodeURIComponent(c.post_slug)}">${esc(c.post_slug)}</a>
             · ${esc(date)}
           </span>
           <button class="adm-action-btn" onclick="admDeleteComment(${Number(c.id)}, '${escAttr(c.post_slug)}')">delete</button>

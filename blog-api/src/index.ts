@@ -807,7 +807,7 @@ async function listPublicMetaPosts(env: Env, origin: string | null): Promise<Pub
 }
 
 function postCanonicalUrl(slug: string): string {
-  return `${SITE}/post?slug=${encodeURIComponent(slug)}`;
+  return `${SITE}/post/?slug=${encodeURIComponent(slug)}`;
 }
 
 function toRssDate(value: string | number | null | undefined): string {

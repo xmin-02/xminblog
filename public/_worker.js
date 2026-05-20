@@ -39,7 +39,7 @@ function setMeta(html, attr, value, tag) {
 function injectPostHead(html, post, requestUrl) {
   const title = `${post.title || post.slug || '글'} — xmin.blog`;
   const description = post.description || 'xmin의 개인 블로그 — 보안, AI, 개발';
-  const canonical = `${requestUrl.origin}/post?slug=${encodeURIComponent(post.slug || requestUrl.searchParams.get('slug') || '')}`;
+  const canonical = `${requestUrl.origin}/post/?slug=${encodeURIComponent(post.slug || requestUrl.searchParams.get('slug') || '')}`;
   const image = absoluteUrl(post.cover, requestUrl.origin);
 
   html = html.replace(/<title>.*?<\/title>/i, `<title>${escapeHtml(title)}</title>`);

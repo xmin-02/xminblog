@@ -299,7 +299,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   function postUrl(slug) {
-    return `/post?slug=${encodeURIComponent(slug)}`;
+    return `/post/?slug=${encodeURIComponent(slug)}`;
   }
 
   function renderPosts(posts) {
