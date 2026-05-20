@@ -1,78 +1,133 @@
 # xmin.blog home-server backend
 
-Current target architecture after this change:
+This follows the home infrastructure map from `/Users/sumin/Desktop/home_server_migration_guide.md`.
 
-- Frontend: static Astro site.
-- API: `blog-api` running on the home server with Node.
-- Public API domain: keep `https://api.xmin.blog`, but point it to the home server reverse proxy or Cloudflare Tunnel.
-- DB: local SQLite file at `blog-api/data/blog.sqlite` by default.
-- Post/image content: still written to the GitHub repo through `GITHUB_TOKEN` so the existing static content workflow keeps working.
+## Target architecture
 
-## Local smoke run
+| Role | Target |
+|---|---|
+| Frontend | Astro static site |
+| Public API domain | `https://api.xmin.cloud` recommended by the home-server domain policy, or keep `https://api.xmin.blog` by CNAME/router alias |
+| API runtime | Docker container on vm-public LXC 106 (`192.168.45.60`) |
+| DB | PostgreSQL 16 on vm-db LXC 107 (`192.168.45.70:5432`) |
+| Edge | Traefik v3 + cloudflared on vm-edge (`192.168.45.20`) |
+| Content writes | GitHub API still writes markdown/images to `xmin-02/xminblog` |
+
+`blog-api/home-server.mjs` runs the existing Worker `fetch()` handler on Node and adapts its D1-style SQL calls to PostgreSQL. SQLite remains as a local-only smoke-test fallback.
+
+## 1. Create PostgreSQL DB/role on vm-db
+
+Run in pgAdmin (`https://db.xmin.dev`) or psql:
+
+```sql
+CREATE ROLE xminblog LOGIN PASSWORD 'replace-with-strong-password';
+CREATE DATABASE xminblog OWNER xminblog ENCODING 'UTF8';
+REVOKE ALL ON DATABASE xminblog FROM PUBLIC;
+```
+
+Connection string:
+
+```text
+postgresql://xminblog:replace-with-strong-password@192.168.45.70:5432/xminblog
+```
+
+If vm-public cannot connect, update `pg_hba.conf` on vm-db for the `192.168.45.0/24` LAN and reload PostgreSQL.
+
+## 2. Deploy API container on vm-public
 
 ```bash
+ssh sumin@pve
+sudo pct exec 106 -- bash
+
+mkdir -p /opt/xminblog
+cd /opt/xminblog
+git clone https://github.com/xmin-02/xminblog.git .
 cd blog-api
 cp .env.home.example .env.home
-# edit .env.home
-set -a && . ./.env.home && set +a
-npm ci
-npm run start:home
-curl http://127.0.0.1:8787/health
+# edit DATABASE_URL, GITHUB_TOKEN, ADMIN_PASSWORD, JWT_SECRET
+
+docker compose -f docker-compose.home.example.yml up -d --build
+docker compose -f docker-compose.home.example.yml logs -f
 ```
 
-The server runs the same Worker `fetch()` handler through `home-server.mjs`, with a small D1-compatible SQLite adapter.
+The compose file binds `0.0.0.0:3001:3000`, which is required so vm-edge can reach vm-public.
 
-## Production service
-
-Example files are included:
-
-- `blog-api/systemd/xmin-blog-api.service`
-- `blog-api/nginx/api.xmin.blog.conf`
-
-Typical deployment outline:
+Health check from vm-public:
 
 ```bash
-sudo useradd --system --home /srv/xminblog --shell /usr/sbin/nologin xminblog
-sudo mkdir -p /srv/xminblog
-sudo chown -R xminblog:xminblog /srv/xminblog
-git clone https://github.com/xmin-02/xminblog.git /srv/xminblog
-cd /srv/xminblog/blog-api
-cp .env.home.example .env.home
-# edit secrets in .env.home
-npm ci
-npm run build:node
-sudo cp systemd/xmin-blog-api.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now xmin-blog-api
+curl -fsS http://127.0.0.1:3001/health
 ```
 
-Then expose `127.0.0.1:8787` as `https://api.xmin.blog` through nginx, Caddy, or Cloudflare Tunnel.
+## 3. Register Traefik route on vm-edge
 
-## D1 to SQLite migration
+Recommended public domain from the guide is `.cloud`:
 
-The schema is compatible with the current D1 tables:
+```bash
+ssh sumin@192.168.45.20
+cat /opt/xminblog/blog-api/traefik-api.xmin.cloud.yml > ~/edge/traefik/dynamic/xmin-blog-api.yml
+# or paste the file content manually
+
+docker logs traefik --tail 20 | grep -i xmin-blog-api
+```
+
+Expected route:
+
+```text
+Host(`api.xmin.cloud`) -> http://192.168.45.60:3001
+```
+
+External verification:
+
+```bash
+curl -i https://api.xmin.cloud/health
+```
+
+If you want to keep `https://api.xmin.blog`, add a second Traefik Host rule/alias or point the old DNS name to the `.cloud` route and build the frontend with the matching API base.
+
+## 4. Frontend API base
+
+Default remains `https://api.xmin.blog` for compatibility. For the guide's `.cloud` public API, build with:
+
+```bash
+PUBLIC_API_BASE=https://api.xmin.cloud npm run build
+```
+
+## 5. D1 to PostgreSQL data migration
+
+Current app tables:
 
 - `users`
 - `comments`
 - `likes`
 - `page_views`
 
-Recommended safe migration path:
+Safe path:
 
 1. Put the blog in a short maintenance window.
-2. Export D1 data from Cloudflare/Wrangler or the dashboard.
-3. Import rows into `blog-api/data/blog.sqlite` using the same table names.
-4. Start the home API locally and verify:
+2. Export D1 data from Cloudflare/Wrangler/dashboard.
+3. Create the PostgreSQL schema with `blog-api/schema.postgres.sql`.
+4. Import each table, preserving IDs and epoch-second `created_at` values.
+5. Reset sequences after importing IDs:
+
+```sql
+SELECT setval(pg_get_serial_sequence('users', 'id'), COALESCE((SELECT MAX(id) FROM users), 1));
+SELECT setval(pg_get_serial_sequence('comments', 'id'), COALESCE((SELECT MAX(id) FROM comments), 1));
+SELECT setval(pg_get_serial_sequence('likes', 'id'), COALESCE((SELECT MAX(id) FROM likes), 1));
+SELECT setval(pg_get_serial_sequence('page_views', 'id'), COALESCE((SELECT MAX(id) FROM page_views), 1));
+```
+
+6. Start the API and verify:
    - `/health`
    - `/api/posts`
    - admin login
    - comments/likes/profile pages
-5. Switch `api.xmin.blog` DNS/tunnel to the home server.
-6. Keep the old Worker route disabled or as rollback only.
+7. Switch `api.xmin.blog` or `api.xmin.cloud` route to the home server.
+8. Keep Cloudflare Worker/D1 as rollback until the home-server path is stable.
 
-## Security notes
+## 6. Security and operations
 
-- Write endpoints now require a live admin JWT; the old `X-Admin-Password` write fallback is not accepted.
-- In-process rate limiting protects obvious abuse, but a reverse proxy limit is still recommended.
-- Keep `GITHUB_TOKEN`, `ADMIN_PASSWORD`, and `JWT_SECRET` outside git.
-- Back up `blog-api/data/blog.sqlite`, `*.sqlite-wal`, and `*.sqlite-shm` together.
+- Write endpoints require a live admin JWT; legacy `X-Admin-Password` write fallback is disabled.
+- In-process rate limits protect login/signup/comment/like/view/upload/private-post verify endpoints. Add Traefik/Cloudflare rate limits for hard enforcement.
+- Keep secrets in `/opt/xminblog/blog-api/.env.home`; never commit them.
+- Backups should be handled by vm-db's PostgreSQL dump cron. Add offsite R2 backup when ready.
+- Build Docker images for `linux/amd64` if publishing to a registry for vm-public.

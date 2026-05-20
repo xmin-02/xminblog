@@ -7,10 +7,10 @@ Personal security/AI/development blog built with Astro plus a separate API backe
 - **Frontend:** Astro static site (`dist/`).
 - **Public API:** `https://api.xmin.blog`.
 - **Home-server API target:** `blog-api/home-server.mjs` running the same Worker fetch handler on Node.
-- **DB:** SQLite on the home server (`blog-api/data/blog.sqlite`).
+- **DB:** PostgreSQL 16 on vm-db (`192.168.45.70:5432`) for production; SQLite is local smoke-test fallback only.
 - **Content source:** Markdown files under `src/content/blog`; admin writes still commit post/image files to GitHub through `GITHUB_TOKEN`.
 
-Cloudflare Worker/D1 files remain for rollback/reference, but the intended backend direction is home-server API + SQLite.
+Cloudflare Worker/D1 files remain for rollback/reference, but the intended backend direction is home-server API + PostgreSQL.
 
 ## Commands
 
@@ -53,7 +53,7 @@ Required secrets:
 
 ## Deployment notes
 
-See [`docs/home-server.md`](docs/home-server.md) for systemd/nginx examples, SQLite migration notes, and the DNS/tunnel cutover checklist.
+See [`docs/home-server.md`](docs/home-server.md) for vm-public Docker, vm-db PostgreSQL, Traefik, migration notes, and the DNS/tunnel cutover checklist.
 
 ## Quality gates
 

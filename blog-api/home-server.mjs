@@ -1,20 +1,24 @@
 #!/usr/bin/env node
 /**
- * Home-server adapter for the Cloudflare Worker API.
+ * Home-server adapter for the blog API.
  *
- * It runs the same fetch handler from src/index.ts on a plain Node HTTP server
- * and provides a small Cloudflare D1-compatible wrapper backed by SQLite.
+ * It runs the same Cloudflare Worker fetch handler on a plain Node HTTP server
+ * and provides a small D1-compatible database wrapper. Production should use
+ * PostgreSQL on vm-db; SQLite remains available only for local smoke tests.
  */
 import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import pg from 'pg';
 import worker from './dist/index.js';
 
+const { Pool } = pg;
+pg.types.setTypeParser(20, value => Number(value)); // int8 / BIGSERIAL / COUNT(*)
 const cwd = process.cwd();
 const port = Number(process.env.PORT || 8787);
 const host = process.env.HOST || '127.0.0.1';
+const dbDriver = (process.env.DB_DRIVER || (process.env.DATABASE_URL ? 'postgres' : 'sqlite')).toLowerCase();
 const dbPath = resolve(cwd, process.env.SQLITE_PATH || './data/blog.sqlite');
 
 function requiredEnv(name) {
@@ -57,7 +61,7 @@ class SQLiteD1Statement {
 }
 
 class SQLiteD1Database {
-  constructor(path) {
+  constructor(path, DatabaseSync) {
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
@@ -72,22 +76,66 @@ class SQLiteD1Database {
   }
 }
 
-function initDb(db) {
+function postgresSql(sql) {
+  let index = 0;
+  return sql
+    .replace(/date\(created_at,\s*'unixepoch'\)/gi, "to_char(to_timestamp(created_at), 'YYYY-MM-DD')")
+    .replace(/\?/g, () => `$${++index}`);
+}
+
+class PostgresD1Statement {
+  constructor(pool, sql, params = []) {
+    this.pool = pool;
+    this.sql = sql;
+    this.params = params;
+  }
+
+  bind(...params) {
+    return new PostgresD1Statement(this.pool, this.sql, params);
+  }
+
+  async first() {
+    const result = await this.pool.query(postgresSql(this.sql), this.params);
+    return result.rows[0] ?? null;
+  }
+
+  async all() {
+    const result = await this.pool.query(postgresSql(this.sql), this.params);
+    return { results: result.rows };
+  }
+
+  async run() {
+    const result = await this.pool.query(postgresSql(this.sql), this.params);
+    return { success: true, meta: { changes: result.rowCount ?? 0 } };
+  }
+}
+
+class PostgresD1Database {
+  constructor(databaseUrl) {
+    this.pool = new Pool({ connectionString: databaseUrl });
+  }
+
+  prepare(sql) {
+    return new PostgresD1Statement(this.pool, sql);
+  }
+
+  async exec(sql) {
+    await this.pool.query(sql);
+  }
+}
+
+async function initDb(db) {
+  if (dbDriver === 'postgres') {
+    await db.exec(readFileSync(new URL('./schema.postgres.sql', import.meta.url), 'utf8'));
+    return;
+  }
+
   db.exec(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'));
 
   const columns = db.prepare('PRAGMA table_info(users)').all().results.map(row => row.name);
   if (!columns.includes('avatar_url')) {
     db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT;');
   }
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS rate_limit_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      bucket TEXT NOT NULL,
-      client_id TEXT NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    );
-  `);
 }
 
 function toRequest(req) {
@@ -130,8 +178,19 @@ async function writeResponse(res, response) {
   res.end();
 }
 
-const DB = new SQLiteD1Database(dbPath);
-initDb(DB);
+async function createDb() {
+  if (dbDriver === 'postgres') {
+    return new PostgresD1Database(requiredEnv('DATABASE_URL'));
+  }
+  if (dbDriver === 'sqlite') {
+    const { DatabaseSync } = await import('node:sqlite');
+    return new SQLiteD1Database(dbPath, DatabaseSync);
+  }
+  throw new Error(`Unsupported DB_DRIVER: ${dbDriver}`);
+}
+
+const DB = await createDb();
+await initDb(DB);
 
 const env = {
   GITHUB_TOKEN: requiredEnv('GITHUB_TOKEN'),
@@ -158,5 +217,6 @@ const server = createServer(async (req, res) => {
 
 server.listen(port, host, () => {
   console.log(`blog-api home server listening on http://${host}:${port}`);
-  console.log(`SQLite DB: ${dbPath}`);
+  console.log(`DB driver: ${dbDriver}`);
+  if (dbDriver === 'sqlite') console.log(`SQLite DB: ${dbPath}`);
 });

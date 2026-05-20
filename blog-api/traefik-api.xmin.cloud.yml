@@ -1,0 +1,13 @@
+http:
+  routers:
+    xmin-blog-api:
+      rule: "Host(`api.xmin.cloud`)"
+      service: xmin-blog-api
+      entryPoints: [websecure]
+      tls: {}
+  services:
+    xmin-blog-api:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://192.168.45.60:3001"
