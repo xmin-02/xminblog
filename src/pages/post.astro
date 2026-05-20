@@ -1118,19 +1118,22 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
         <!-- Cover image (optional) -->
         <label class="edit-field-label">대표 이미지 <span style="opacity:0.7;">(선택, 목록·상세 상단 배너)</span></label>
-        <div class="flex flex-col sm:flex-row gap-2 mb-2" style="max-width:640px;">
-          <input id="edit-cover" type="url" value="${esc(post.cover || '')}" placeholder="https://... 또는 첨부 버튼으로 업로드"
-            class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-2 py-1.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full block"
-            style="font-family:var(--font-mono);" />
-          <div class="flex gap-2">
-            <input id="edit-cover-file" type="file" accept="image/*" class="hidden" onchange="handleCoverFileSelected(event)" />
-            <button type="button" class="edit-save-btn" style="white-space:nowrap;padding:0.45rem 0.8rem;" onclick="pickCoverImage()">이미지 첨부</button>
-            <button type="button" class="edit-cancel-btn" style="white-space:nowrap;padding:0.45rem 0.8rem;" onclick="clearCoverImage()">비우기</button>
+        <div id="edit-cover-dropzone" class="mb-4 rounded-lg border border-dashed border-[var(--color-border)] transition-colors"
+          style="max-width:640px;padding:0.75rem;background:rgba(34,211,238,0.03);">
+          <div class="flex flex-col sm:flex-row gap-2 mb-2">
+            <input id="edit-cover" type="url" value="${esc(post.cover || '')}" placeholder="https://... 또는 파일 드래그/첨부"
+              class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-2 py-1.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full block"
+              style="font-family:var(--font-mono);" />
+            <div class="flex gap-2">
+              <input id="edit-cover-file" type="file" accept="image/*" class="hidden" onchange="handleCoverFileSelected(event)" />
+              <button type="button" class="edit-save-btn" style="white-space:nowrap;padding:0.45rem 0.8rem;" onclick="pickCoverImage()">이미지 첨부</button>
+              <button type="button" class="edit-cancel-btn" style="white-space:nowrap;padding:0.45rem 0.8rem;" onclick="clearCoverImage()">비우기</button>
+            </div>
           </div>
-        </div>
-        <div id="edit-cover-status" class="text-xs mb-2" style="min-height:1rem;color:var(--color-text-secondary);"></div>
-        <div id="edit-cover-preview" class="mb-4 rounded-lg overflow-hidden border border-[var(--color-border)]" style="display:${post.cover ? 'block' : 'none'};max-width:640px;background:var(--color-bg-secondary);">
-          <img id="edit-cover-img" src="${esc(post.cover || '')}" alt="대표 이미지 미리보기" style="width:100%;max-height:220px;object-fit:cover;display:block;" />
+          <div id="edit-cover-status" class="text-xs mb-2" style="min-height:1rem;color:var(--color-text-secondary);">여기에 이미지를 드래그 앤 드랍해도 대표 이미지로 첨부됩니다.</div>
+          <div id="edit-cover-preview" class="rounded-lg overflow-hidden border border-[var(--color-border)]" style="display:${post.cover ? 'block' : 'none'};background:var(--color-bg-secondary);">
+            <img id="edit-cover-img" src="${esc(post.cover || '')}" alt="대표 이미지 미리보기" style="width:100%;max-height:220px;object-fit:cover;display:block;" />
+          </div>
         </div>
 
         <!-- Private password (conditional) -->
@@ -1169,6 +1172,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     document.getElementById('edit-cover')?.addEventListener('input', event => {
       updateCoverPreview(event.target.value.trim());
     });
+    setupCoverDropZone();
   }
 
   function waitForEditor(maxWaitMs = 8000) {
@@ -1201,6 +1205,58 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     if (!status) return;
     status.textContent = message;
     status.style.color = color;
+  }
+
+  function setCoverDropActive(active) {
+    const zone = document.getElementById('edit-cover-dropzone');
+    if (!zone) return;
+    zone.style.borderColor = active ? 'var(--color-accent)' : 'var(--color-border)';
+    zone.style.background = active ? 'rgba(34,211,238,0.10)' : 'rgba(34,211,238,0.03)';
+  }
+
+  function firstDroppedImage(dataTransfer) {
+    const files = Array.from(dataTransfer?.files || []);
+    return files.find(file => file.type?.startsWith('image/')) || null;
+  }
+
+  function hasDraggedFiles(dataTransfer) {
+    return Array.from(dataTransfer?.types || []).includes('Files');
+  }
+
+  function setupCoverDropZone() {
+    const zone = document.getElementById('edit-cover-dropzone');
+    if (!zone) return;
+
+    ['dragenter', 'dragover'].forEach(type => {
+      zone.addEventListener(type, event => {
+        if (!hasDraggedFiles(event.dataTransfer)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setCoverDropActive(true);
+        setCoverUploadStatus('놓으면 대표 이미지로 업로드됩니다.');
+      });
+    });
+
+    ['dragleave', 'dragend'].forEach(type => {
+      zone.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        setCoverDropActive(false);
+      });
+    });
+
+    zone.addEventListener('drop', event => {
+      if (!hasDraggedFiles(event.dataTransfer)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setCoverDropActive(false);
+      const file = firstDroppedImage(event.dataTransfer);
+      if (!file) {
+        setCoverUploadStatus('이미지 파일만 대표 이미지로 드롭할 수 있습니다.', '#ef4444');
+        return;
+      }
+      uploadCoverImage(file);
+    });
   }
 
   function updateCoverPreview(url) {
