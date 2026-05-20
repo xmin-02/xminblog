@@ -1116,11 +1116,22 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-2 py-1.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-4"
           style="max-width:480px;" />
 
-        <!-- Cover image URL (optional) -->
-        <label class="edit-field-label">대표 이미지 URL <span style="opacity:0.7;">(선택, 목록·상세 상단 배너)</span></label>
-        <input id="edit-cover" type="url" value="${esc(post.cover || '')}" placeholder="https://..."
-          class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-2 py-1.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-4 block"
-          style="max-width:480px;font-family:var(--font-mono);" />
+        <!-- Cover image (optional) -->
+        <label class="edit-field-label">대표 이미지 <span style="opacity:0.7;">(선택, 목록·상세 상단 배너)</span></label>
+        <div class="flex flex-col sm:flex-row gap-2 mb-2" style="max-width:640px;">
+          <input id="edit-cover" type="url" value="${esc(post.cover || '')}" placeholder="https://... 또는 첨부 버튼으로 업로드"
+            class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-2 py-1.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full block"
+            style="font-family:var(--font-mono);" />
+          <div class="flex gap-2">
+            <input id="edit-cover-file" type="file" accept="image/*" class="hidden" onchange="handleCoverFileSelected(event)" />
+            <button type="button" class="edit-save-btn" style="white-space:nowrap;padding:0.45rem 0.8rem;" onclick="pickCoverImage()">이미지 첨부</button>
+            <button type="button" class="edit-cancel-btn" style="white-space:nowrap;padding:0.45rem 0.8rem;" onclick="clearCoverImage()">비우기</button>
+          </div>
+        </div>
+        <div id="edit-cover-status" class="text-xs mb-2" style="min-height:1rem;color:var(--color-text-secondary);"></div>
+        <div id="edit-cover-preview" class="mb-4 rounded-lg overflow-hidden border border-[var(--color-border)]" style="display:${post.cover ? 'block' : 'none'};max-width:640px;background:var(--color-bg-secondary);">
+          <img id="edit-cover-img" src="${esc(post.cover || '')}" alt="대표 이미지 미리보기" style="width:100%;max-height:220px;object-fit:cover;display:block;" />
+        </div>
 
         <!-- Private password (conditional) -->
         <div id="edit-password-wrap" style="display:${post.is_private ? 'block' : 'none'};">
@@ -1154,6 +1165,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         getAuthToken: () => localStorage.getItem('auth_token'),
       });
     });
+
+    document.getElementById('edit-cover')?.addEventListener('input', event => {
+      updateCoverPreview(event.target.value.trim());
+    });
   }
 
   function waitForEditor(maxWaitMs = 8000) {
@@ -1175,6 +1190,92 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const pw = document.getElementById('edit-password');
     if (wrap) wrap.style.display = checked ? 'block' : 'none';
     if (pw && !checked) pw.value = '';
+  }
+
+  function pickCoverImage() {
+    document.getElementById('edit-cover-file')?.click();
+  }
+
+  function setCoverUploadStatus(message, color = 'var(--color-text-secondary)') {
+    const status = document.getElementById('edit-cover-status');
+    if (!status) return;
+    status.textContent = message;
+    status.style.color = color;
+  }
+
+  function updateCoverPreview(url) {
+    const preview = document.getElementById('edit-cover-preview');
+    const img = document.getElementById('edit-cover-img');
+    if (!preview || !img) return;
+    if (!url) {
+      preview.style.display = 'none';
+      img.removeAttribute('src');
+      return;
+    }
+    img.src = url;
+    preview.style.display = 'block';
+  }
+
+  function clearCoverImage() {
+    const input = document.getElementById('edit-cover');
+    if (input) input.value = '';
+    updateCoverPreview('');
+    setCoverUploadStatus('');
+  }
+
+  async function handleCoverFileSelected(event) {
+    const input = event.target;
+    const file = input?.files?.[0];
+    if (!file) return;
+    try {
+      await uploadCoverImage(file);
+    } finally {
+      input.value = '';
+    }
+  }
+
+  async function uploadCoverImage(file) {
+    if (!file.type?.startsWith('image/')) {
+      setCoverUploadStatus('이미지 파일만 첨부할 수 있습니다.', '#ef4444');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setCoverUploadStatus('대표 이미지는 5MB 이하만 첨부할 수 있습니다.', '#ef4444');
+      return;
+    }
+
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      setCoverUploadStatus('관리자 로그인 후 첨부할 수 있습니다.', '#ef4444');
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('file', file);
+    setCoverUploadStatus('대표 이미지 업로드 중...');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          clearStoredAuth();
+          throw new Error('관리자 로그인이 만료되었거나 권한이 없습니다. 다시 로그인해주세요.');
+        }
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      if (!data.url) throw new Error('업로드 URL이 응답에 없습니다.');
+      const coverInput = document.getElementById('edit-cover');
+      if (coverInput) coverInput.value = data.url;
+      updateCoverPreview(data.url);
+      setCoverUploadStatus('대표 이미지가 첨부되었습니다.', '#10b981');
+    } catch (error) {
+      setCoverUploadStatus(`업로드 실패: ${error.message || error}`, '#ef4444');
+    }
   }
 
   let _previewTimer = null;
