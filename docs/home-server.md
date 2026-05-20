@@ -128,7 +128,7 @@ If you want to keep `https://api.xmin.blog`, add a second Traefik Host rule/alia
 
 ## 5. Frontend API base
 
-Default remains `https://api.xmin.blog` for compatibility. For the guide's `.cloud` public API, build with:
+Default is `https://api.xmin.cloud`. If needed, override the frontend API base at build time:
 
 ```bash
 PUBLIC_API_BASE=https://api.xmin.cloud npm run build

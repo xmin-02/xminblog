@@ -5,7 +5,7 @@ Personal security/AI/development blog built with Astro plus a separate API backe
 ## Architecture
 
 - **Frontend:** Astro static site (`dist/`).
-- **Public API:** `https://api.xmin.blog` by default; home-server guide recommends `https://api.xmin.cloud`.
+- **Public API:** `https://api.xmin.cloud` by default; `https://api.xmin.blog` remains a compatibility alias.
 - **Home-server API target:** `blog-api/home-server.mjs` running the same Worker fetch handler on Node.
 - **DB:** PostgreSQL 16 on vm-db (`192.168.45.70:5432`) for production; SQLite is local smoke-test fallback only.
 - **Content source:** Server-managed mode stores posts in PostgreSQL (`posts` table) and uploaded images in a vm-public volume served from `/uploads/*`.
@@ -34,7 +34,7 @@ npm run import:markdown
 
 ## Configuration
 
-Frontend API base defaults to `https://api.xmin.blog` and can be overridden at build time:
+Frontend API base defaults to `https://api.xmin.cloud` and can be overridden at build time:
 
 ```bash
 PUBLIC_API_BASE=https://api.xmin.cloud npm run build
