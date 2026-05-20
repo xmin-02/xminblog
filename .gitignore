@@ -28,3 +28,9 @@ pnpm-debug.log*
 
 # wrangler local state
 .wrangler/
+
+# home-server runtime state
+blog-api/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

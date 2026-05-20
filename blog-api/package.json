@@ -2,14 +2,18 @@
   "name": "blog-api",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "build:node": "tsc -p tsconfig.node.json",
+    "start:home": "npm run build:node && node home-server.mjs",
     "deploy": "wrangler deploy",
     "deploy:prod": "wrangler deploy --env production"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241127.0",
     "typescript": "^5.5.2",
-    "wrangler": "^3.80.0"
+    "wrangler": "^4.93.0"
   }
 }

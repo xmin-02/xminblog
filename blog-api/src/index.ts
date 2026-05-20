@@ -43,6 +43,10 @@ const CONTENT_PATH = 'src/content/blog';
 const JWT_EXPIRY_SECS = 60 * 60 * 24 * 7; // 7 days
 const ADMIN_EMAIL = 'admin@xmin.blog';
 
+// Best-effort in-memory throttling. This is intentionally local-process/local-isolate
+// only; put nginx/Cloudflare rate limiting in front of the home server for hard limits.
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 
 function corsHeaders(origin: string | null): Record<string, string> {
@@ -52,7 +56,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Password, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
   };
 }
@@ -62,6 +66,30 @@ function json(data: unknown, status = 200, origin: string | null = null): Respon
     status,
     headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
   });
+}
+
+function clientIp(request: Request): string {
+  return (
+    request.headers.get('cf-connecting-ip')
+    || request.headers.get('x-real-ip')
+    || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || 'unknown'
+  );
+}
+
+function rateLimit(request: Request, bucket: string, limit: number, windowSecs: number, origin: string | null): Response | null {
+  const now = Date.now();
+  const key = `${bucket}:${clientIp(request)}`;
+  const current = rateLimitBuckets.get(key);
+  if (!current || current.resetAt <= now) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + windowSecs * 1000 });
+    return null;
+  }
+  current.count += 1;
+  if (current.count > limit) {
+    return json({ error: 'Too many requests' }, 429, origin);
+  }
+  return null;
 }
 
 // ─── Crypto helpers ───────────────────────────────────────────────────────────
@@ -878,9 +906,13 @@ export default {
 
     // ── Auth routes ──────────────────────────────────────────────────────────
     if (url.pathname === '/api/auth/signup' && method === 'POST') {
+      const limited = rateLimit(request, 'signup', 5, 60 * 10, origin);
+      if (limited) return limited;
       return handleSignup(request, env, origin);
     }
     if (url.pathname === '/api/auth/login' && method === 'POST') {
+      const limited = rateLimit(request, 'login', 10, 60 * 10, origin);
+      if (limited) return limited;
       return handleLogin(request, env, origin);
     }
     if (url.pathname === '/api/auth/me' && method === 'GET') {
@@ -901,12 +933,18 @@ export default {
       return getAdminStats(request, env, origin);
     }
     if (url.pathname === '/api/upload' && method === 'POST') {
+      const limited = rateLimit(request, 'upload', 30, 60 * 10, origin);
+      if (limited) return limited;
       return uploadImage(request, env, origin);
     }
     const viewMatch = url.pathname.match(/^\/api\/views\/(.+)$/);
     if (viewMatch) {
       const slug = decodeURIComponent(viewMatch[1]);
-      if (method === 'POST') return recordView(slug, request, env, origin);
+      if (method === 'POST') {
+        const limited = rateLimit(request, 'views', 120, 60, origin);
+        if (limited) return limited;
+        return recordView(slug, request, env, origin);
+      }
       return json({ error: 'Method not allowed' }, 405, origin);
     }
 
@@ -920,7 +958,11 @@ export default {
     if (commentSlugMatch) {
       const slug = decodeURIComponent(commentSlugMatch[1]);
       if (method === 'GET') return getComments(slug, env, origin);
-      if (method === 'POST') return addComment(slug, request, env, origin);
+      if (method === 'POST') {
+        const limited = rateLimit(request, 'comments', 20, 60 * 10, origin);
+        if (limited) return limited;
+        return addComment(slug, request, env, origin);
+      }
       return json({ error: 'Method not allowed' }, 405, origin);
     }
 
@@ -929,7 +971,11 @@ export default {
     if (likeMatch) {
       const slug = decodeURIComponent(likeMatch[1]);
       if (method === 'GET') return getLikes(slug, request, env, origin);
-      if (method === 'POST') return toggleLike(slug, request, env, origin);
+      if (method === 'POST') {
+        const limited = rateLimit(request, 'likes', 60, 60, origin);
+        if (limited) return limited;
+        return toggleLike(slug, request, env, origin);
+      }
       return json({ error: 'Method not allowed' }, 405, origin);
     }
 
@@ -937,7 +983,11 @@ export default {
     const verifyMatch = url.pathname.match(/^\/api\/posts\/(.+)\/verify$/);
     if (verifyMatch) {
       const slug = decodeURIComponent(verifyMatch[1]);
-      if (method === 'POST') return verifyPostPassword(slug, request, env, origin);
+      if (method === 'POST') {
+        const limited = rateLimit(request, 'private-post-verify', 20, 60 * 10, origin);
+        if (limited) return limited;
+        return verifyPostPassword(slug, request, env, origin);
+      }
       return json({ error: 'Method not allowed' }, 405, origin);
     }
 
@@ -953,18 +1003,13 @@ export default {
       return listPosts(request, env, origin);
     }
 
-    // Mutating post routes — require admin JWT or legacy password
+    // Mutating post routes — require a live admin JWT. The old password/header
+    // fallback is intentionally not accepted on write endpoints anymore.
     let body: Partial<PostPayload> = {};
     try { body = await request.json() as Partial<PostPayload>; } catch { /* empty body ok for DELETE with JWT */ }
 
-    const authUser = await getAuthUser(request, env);
-    const isAdminJWT = authUser?.role === 'admin';
-    if (!isAdminJWT) {
-      const password = (body.password as string) ?? request.headers.get('X-Admin-Password') ?? '';
-      if (!(await verifyAdminPassword(password, env))) {
-        return json({ error: 'Unauthorized' }, 401, origin);
-      }
-    }
+    const admin = await requireAdminRequest(request, env, origin);
+    if (admin instanceof Response) return admin;
 
     if (method === 'POST' && !slug) {
       const p = body as PostPayload;

@@ -18,6 +18,7 @@ const {
   noindex = false,
   ogType = 'website',
 } = Astro.props;
+const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.xmin.blog';
 ---
 
 <!DOCTYPE html>
@@ -43,6 +44,9 @@ const {
     <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <title>{title}</title>
+    <script define:vars={{ apiBase }}>
+      window.__XMIN_API_BASE__ = apiBase;
+    </script>
     <script is:inline>
       const theme = localStorage.getItem('theme') ?? 'dark';
       if (theme === 'dark') document.documentElement.classList.add('dark');

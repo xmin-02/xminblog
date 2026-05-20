@@ -1,43 +1,65 @@
-# Astro Starter Kit: Minimal
+# xmin.blog
 
-```sh
-npm create astro@latest -- --template minimal
+Personal security/AI/development blog built with Astro plus a separate API backend.
+
+## Architecture
+
+- **Frontend:** Astro static site (`dist/`).
+- **Public API:** `https://api.xmin.blog`.
+- **Home-server API target:** `blog-api/home-server.mjs` running the same Worker fetch handler on Node.
+- **DB:** SQLite on the home server (`blog-api/data/blog.sqlite`).
+- **Content source:** Markdown files under `src/content/blog`; admin writes still commit post/image files to GitHub through `GITHUB_TOKEN`.
+
+Cloudflare Worker/D1 files remain for rollback/reference, but the intended backend direction is home-server API + SQLite.
+
+## Commands
+
+```bash
+npm ci
+npm run dev
+npm run build
+npm run preview
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+API:
 
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+```bash
+cd blog-api
+npm ci
+npm run typecheck
+npm run build:node
+npm run start:home
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+## Configuration
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+Frontend API base defaults to `https://api.xmin.blog` and can be overridden at build time:
 
-Any static assets, like images, can be placed in the `public/` directory.
+```bash
+PUBLIC_API_BASE=https://api.xmin.blog npm run build
+```
 
-## 🧞 Commands
+Home API environment template:
 
-All commands are run from the root of the project, from a terminal:
+```bash
+cp blog-api/.env.home.example blog-api/.env.home
+```
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+Required secrets:
 
-## 👀 Want to learn more?
+- `GITHUB_TOKEN`
+- `ADMIN_PASSWORD`
+- `JWT_SECRET`
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+## Deployment notes
+
+See [`docs/home-server.md`](docs/home-server.md) for systemd/nginx examples, SQLite migration notes, and the DNS/tunnel cutover checklist.
+
+## Quality gates
+
+CI runs:
+
+- frontend install/build/audit
+- API install/typecheck
+- home-server API bundle build
+- `/health` smoke test against the Node home API

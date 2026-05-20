@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+          cache: npm
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Build frontend
+        run: npm run build
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=moderate
+      - name: Install API dependencies
+        working-directory: blog-api
+        run: npm ci
+      - name: Typecheck API
+        working-directory: blog-api
+        run: npm run typecheck
+      - name: Build home-server API bundle
+        working-directory: blog-api
+        run: npm run build:node
+      - name: Smoke test home-server API
+        working-directory: blog-api
+        env:
+          GITHUB_TOKEN: dummy
+          ADMIN_PASSWORD: test-admin-password
+          JWT_SECRET: test-jwt-secret-for-ci
+          SQLITE_PATH: /tmp/xmin-blog-ci.sqlite
+          HOST: 127.0.0.1
+          PORT: 8791
+        run: |
+          node home-server.mjs > /tmp/xmin-blog-api.log 2>&1 &
+          pid=$!
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:8791/health; then
+              kill "$pid"
+              wait "$pid" || true
+              exit 0
+            fi
+            sleep 0.5
+          done
+          cat /tmp/xmin-blog-api.log
+          kill "$pid" || true
+          exit 1

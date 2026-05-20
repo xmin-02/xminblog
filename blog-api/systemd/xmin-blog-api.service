@@ -1,0 +1,22 @@
+[Unit]
+Description=xmin.blog home API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/xminblog/blog-api
+EnvironmentFile=/srv/xminblog/blog-api/.env.home
+ExecStart=/usr/bin/npm run start:home
+Restart=always
+RestartSec=5
+User=xminblog
+Group=xminblog
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/xminblog/blog-api/data
+
+[Install]
+WantedBy=multi-user.target
