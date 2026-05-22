@@ -591,12 +591,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       return new RegExp(`^${escaped}$`, 'i');
     }
 
+    function displayNodeName(name, node) {
+      if (node?._type === 'dir') return `${name}/`;
+      if (node?._type === 'post') return `${name}*`;
+      if (node?._type === 'link') return `${name}@`;
+      return name;
+    }
+
     function getNode(path) {
       const parts = path.split('/').filter(Boolean);
       let node = fs;
       for (const p of parts) {
-        if (!node || typeof node !== 'object' || !node[p]) return null;
-        node = node[p];
+        if (!node || typeof node !== 'object') return null;
+        const key = node[p] ? p : (p.endsWith('@') && node[p.slice(0, -1)] ? p.slice(0, -1) : p);
+        if (!node[key]) return null;
+        node = node[key];
       }
       return node;
     }
@@ -652,11 +661,26 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
 
     function cmdLs(args) {
-      const target = args.trim() || '';
-      const path = resolvePath(target);
+      const target = args.trim();
+      const path = target ? resolvePath(target) : cwd;
       const node = getNode(path);
-      if (!node || node._type !== 'dir') {
-        append(`<span class="t-error">ls: ${esc(target || path)}: 디렉터리 없음</span>`);
+      if (!node) {
+        append(`<span class="t-error">ls: ${esc(target || shortPath(path))}: 없음</span>`);
+        return;
+      }
+      if (node._type === 'post') {
+        const lock = node.is_private ? '<span class="t-priv">🔒</span>' : '';
+        append(`${lock}<span class="t-post-name">${esc(node.slug)}*</span> <span class="t-dim">— ${esc(node.title)}</span>`);
+        return;
+      }
+      if (node._type === 'link') {
+        const display = target || shortPath(path);
+        const shown = display.endsWith('@') ? display : `${display}@`;
+        append(`<span class="t-ok">${esc(shown)}</span> <span class="t-dim">-> ${esc(node.url)}</span>`);
+        return;
+      }
+      if (node._type !== 'dir') {
+        append(`<span class="t-error">ls: ${esc(target || shortPath(path))}: 디렉터리 없음</span>`);
         return;
       }
       const { dirs, posts, links } = lsDir(node);
@@ -676,13 +700,49 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       if (!t) { cwd = '/home/xmin'; updatePrompt(); return; }
       const path = resolvePath(t);
       const node = getNode(path);
-      if (!node) { append(`<span class="t-error">cd: ${esc(t)}: 디렉터리 없음</span>`); return; }
+      if (!node) { append(`<span class="t-error">cd: ${esc(t)}: 디렉터리 없음</span>`); suggestPath(t, 'cd'); return; }
+      if (node._type === 'link') { append(`<span class="t-error">cd: ${esc(t)}: 링크입니다</span> <span class="t-dim">열기: <span class="t-ok">open ${esc(t)}</span></span>`); return; }
       if (node._type !== 'dir') { append(`<span class="t-error">cd: ${esc(t)}: 디렉터리가 아님</span>`); return; }
       cwd = path;
       updatePrompt();
     }
 
     function cmdPwd() { append(`<span class="t-dim">${esc(cwd)}</span>`); }
+
+    function findLink(arg) {
+      const input = (arg || '').trim();
+      if (!input) return null;
+      const clean = input.endsWith('@') ? input.slice(0, -1) : input;
+      const path = resolvePath(clean);
+      const node = getNode(path);
+      if (node?._type === 'link') return { node, path };
+      if (!clean.includes('/')) {
+        const homePath = `/home/xmin/${clean}`;
+        const homeNode = getNode(homePath);
+        if (homeNode?._type === 'link') return { node: homeNode, path: homePath };
+      }
+      return null;
+    }
+
+    function suggestPath(input, action = 'open') {
+      const raw = (input || '').trim();
+      if (!raw) return;
+      const path = resolvePath(raw);
+      const slash = path.lastIndexOf('/');
+      const parentPath = slash >= 0 ? path.slice(0, slash) || '/' : cwd;
+      const name = slash >= 0 ? path.slice(slash + 1).replace(/[@*]$/, '') : raw.replace(/[@*]$/, '');
+      const parent = getNode(parentPath);
+      if (!parent || parent._type !== 'dir' || !name) return;
+      const matches = Object.keys(parent)
+        .filter(k => !isMeta(k) && k.toLowerCase().startsWith(name.toLowerCase()))
+        .slice(0, 8);
+      if (!matches.length) return;
+      append('<span class="t-dim">혹시 이것?</span> ' + matches.map(k => {
+        const display = displayNodeName(k, parent[k]);
+        const prefix = raw.includes('/') ? raw.slice(0, raw.lastIndexOf('/') + 1) : '';
+        return `<span class="t-ok">${esc(action)} ${esc(prefix + display)}</span>`;
+      }).join('  '));
+    }
 
     function findPostMatches(arg) {
       const input = (arg || '').trim();
@@ -740,10 +800,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     function cmdCat(args) {
       const t = args.trim();
       if (!t) { append('<span class="t-error">cat: 인자 필요</span>'); return; }
+      const link = findLink(t);
+      if (link) { append(`<span class="t-ok">${esc(t)}</span> <span class="t-dim">-> ${esc(link.node.url)} · 열기: <span class="t-ok">open ${esc(t)}</span></span>`); return; }
       const matches = findPostMatches(t);
       if (matches.length > 1) { renderPostMatches('cat', matches, 'cat'); return; }
       const found = matches[0];
-      if (!found) { append(`<span class="t-error">cat: ${esc(t)}: 파일 없음</span>`); return; }
+      if (!found) { append(`<span class="t-error">cat: ${esc(t)}: 파일 없음</span>`); suggestPath(t, 'cat'); return; }
       const n = found.node;
       const tagStr = (n.tags || []).map(x => `<span class="tag">[${esc(x)}]</span>`).join(' ');
       const lock = n.is_private ? ' <span class="t-priv">🔒 비공개</span>' : '';
@@ -760,8 +822,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       else window.location.href = url;
     }
 
+    function navigateUrl(url, newTab) {
+      if (newTab) window.open(url, '_blank');
+      else window.location.href = url;
+    }
+
     async function openWithPasswordCheck(node, newTab) {
-      if (!node.is_private) { navigate(node.slug, newTab); return; }
+      if (!node.is_private) {
+        append(`<span class="t-ok">열기...</span> <span class="t-dim">${esc(postUrl(node.slug))}</span>`);
+        setTimeout(() => navigate(node.slug, newTab), 120);
+        return;
+      }
       const cached = sessionStorage.getItem(`post_pw_${node.slug}`);
       if (cached) {
         const ok = await verifyPostPassword(node.slug, cached);
@@ -783,20 +854,26 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       raw = raw.replace(/(^|\s)(-n|--new)(?=\s|$)/g, () => { newTab = true; return ' '; }).trim();
       const target = raw.replace(/^['"]|['"]$/g, '');
       if (!target) { append('<span class="t-error">open: 인자 필요 (예: open hello-world)</span>'); return; }
+      const link = findLink(target);
+      if (link) {
+        append(`<span class="t-ok">열기...</span> <span class="t-dim">${esc(link.node.url)}</span>`);
+        setTimeout(() => navigateUrl(link.node.url, newTab), 120);
+        return;
+      }
       const matches = findPostMatches(target);
       if (matches.length > 1) { renderPostMatches('open', matches, 'open'); return; }
       const found = matches[0];
-      if (!found) { append(`<span class="t-error">open: ${esc(target)}: 글 없음</span>`); return; }
+      if (!found) { append(`<span class="t-error">open: ${esc(target)}: 글 없음</span>`); suggestPath(target, 'open'); return; }
       await openWithPasswordCheck(found.node, newTab);
     }
 
     function cmdHelp() {
       append('<span class="t-warn">사용 가능한 명령어:</span>');
       append('  <span class="t-ok">whoami</span>         프로필 보기');
-      append('  <span class="t-ok">ls</span> [path]      현재/지정 디렉터리 목록');
+      append('  <span class="t-ok">ls</span> [path]      현재/지정 경로 보기 (디렉터리/글/링크)');
       append('  <span class="t-ok">cd</span> [path]      디렉터리 이동 (ls posts/ 후 cd posts/&lt;category&gt;)');
       append('  <span class="t-ok">cat</span> &lt;slug&gt;      글 메타 정보 보기');
-      append('  <span class="t-ok">open</span> [-n] &lt;path|slug|glob&gt;  글 열기 (-n: 새 탭, * 와일드카드 지원)');
+      append('  <span class="t-ok">open</span> [-n] &lt;path|slug|glob|link&gt;  글/링크 열기 (-n: 새 탭, * 지원)');
       append('  <span class="t-ok">pwd</span>            현재 경로');
       append('  <span class="t-ok">categories</span>     카테고리 전체 목록');
       append('  <span class="t-ok">tags</span>           태그 전체 목록');
@@ -902,10 +979,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const lookupPath = resolvePath(prefix || '.');
       const node = getNode(lookupPath);
       if (!node || node._type !== 'dir') return val;
-      const { dirs, posts: postsArr } = lsDir(node);
+      const { dirs, posts: postsArr, links } = lsDir(node);
       let pool = [...dirs];
-      if (cmd === 'cat' || cmd === 'open' || cmd === 'run' || cmd === 'exec' || cmd === 'less' || cmd === 'more') pool = pool.concat(postsArr.map(p => p.k));
-      if (cmd === 'ls' || cmd === 'cd') { /* dirs only */ }
+      if (cmd === 'cat' || cmd === 'open' || cmd === 'run' || cmd === 'exec' || cmd === 'less' || cmd === 'more') pool = pool.concat(postsArr.map(p => p.k), links.map(l => `${l}@`));
+      if (cmd === 'ls') pool = pool.concat(postsArr.map(p => p.k), links.map(l => `${l}@`));
+      if (cmd === 'cd') { /* dirs only */ }
       if (cmd !== 'ls' && cmd !== 'cd' && cmd !== 'cat' && cmd !== 'open' && cmd !== 'run' && cmd !== 'exec' && cmd !== 'less' && cmd !== 'more') {
         pool = pool.concat(postsArr.map(p => p.k));
       }
