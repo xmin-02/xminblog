@@ -41,6 +41,15 @@
 
 html {
   scroll-behavior: smooth;
+  /* Keep the viewport width stable when search/filtering makes the page
+     shorter than the screen and the vertical scrollbar would disappear. */
+  scrollbar-gutter: stable;
+}
+
+@supports not (scrollbar-gutter: stable) {
+  html {
+    overflow-y: scroll;
+  }
 }
 
 body {
