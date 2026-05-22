@@ -557,6 +557,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
 
     let cwd = '/home/xmin';
+    let previousCwd = cwd;
     const history = [];
     let historyIdx = -1;
     let pendingPw = null; // { slug, newTab }
@@ -580,8 +581,36 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
 
     function splitCommandLine(raw) {
-      const match = raw.trim().match(/^(\S+)(?:\s+([\s\S]*))?$/);
-      return match ? { cmd: match[1], args: match[2] || '' } : { cmd: '', args: '' };
+      const words = shellWords(raw);
+      return { cmd: words[0] || '', args: words.slice(1).join(' '), words };
+    }
+
+    function shellWords(raw) {
+      const words = [];
+      let cur = '';
+      let quote = '';
+      let escaping = false;
+      for (const ch of String(raw || '').trim()) {
+        if (escaping) { cur += ch; escaping = false; continue; }
+        if (ch === '\\') { escaping = true; continue; }
+        if (quote) {
+          if (ch === quote) quote = '';
+          else cur += ch;
+          continue;
+        }
+        if (ch === '"' || ch === "'") { quote = ch; continue; }
+        if (/\s/.test(ch)) {
+          if (cur) { words.push(cur); cur = ''; }
+          continue;
+        }
+        cur += ch;
+      }
+      if (cur) words.push(cur);
+      return words;
+    }
+
+    function stripDecorativeSuffix(value) {
+      return String(value || '').replace(/[@*]$/, '');
     }
 
     function globToRegExp(pattern) {
@@ -603,7 +632,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       let node = fs;
       for (const p of parts) {
         if (!node || typeof node !== 'object') return null;
-        const key = node[p] ? p : (p.endsWith('@') && node[p.slice(0, -1)] ? p.slice(0, -1) : p);
+        const clean = stripDecorativeSuffix(p);
+        const key = node[p] ? p : (node[clean] ? clean : p);
         if (!node[key]) return null;
         node = node[key];
       }
@@ -660,19 +690,52 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       return { dirs, posts, links };
     }
 
+    function renderNodeName(name, node, long = false) {
+      if (node?._type === 'dir') return `<span class="t-dir-name">${esc(name)}/</span>${long ? ' <span class="t-dim">directory</span>' : ''}`;
+      if (node?._type === 'post') {
+        const lock = node.is_private ? '<span class="t-priv">🔒</span>' : '';
+        const meta = long ? ` <span class="t-dim">— ${esc(node.title || node.slug)}</span>` : '';
+        return `${lock}<span class="t-post-name">${esc(name)}</span>*${meta}`;
+      }
+      if (node?._type === 'link') return `<span class="t-ok">${esc(name)}@</span>${long ? ` <span class="t-dim">-> ${esc(node.url)}</span>` : ''}`;
+      return esc(name);
+    }
+
+    function findPathMatches(arg) {
+      const input = (arg || '').trim();
+      const path = resolvePath(input);
+      const slash = path.lastIndexOf('/');
+      const parentPath = slash >= 0 ? path.slice(0, slash) || '/' : cwd;
+      const basename = slash >= 0 ? path.slice(slash + 1) : input;
+      const parent = getNode(parentPath);
+      if (!parent || parent._type !== 'dir') return [];
+      const pattern = basename.endsWith('@') ? basename.slice(0, -1) : basename;
+      const re = globToRegExp(pattern);
+      return Object.keys(parent)
+        .filter(k => !isMeta(k) && parent[k] && re.test(k))
+        .sort((a, b) => a.localeCompare(b))
+        .map(k => ({ name: k, node: parent[k], path: `${parentPath}/${k}`.replace(/\/+/g, '/') }));
+    }
+
     function cmdLs(args) {
-      const target = args.trim();
+      const words = shellWords(args);
+      const long = words.some(w => /^-[alh]+$/.test(w));
+      const targets = words.filter(w => !/^-[alh]+$/.test(w));
+      const target = targets.join(' ');
+      if (target && /[*?]/.test(target)) {
+        const matches = findPathMatches(target);
+        if (!matches.length) { append(`<span class="t-error">ls: ${esc(target)}: 없음</span>`); return; }
+        append(matches.map(m => renderNodeName(m.name, m.node, long)).join(long ? '<br>' : '  '));
+        return;
+      }
       const path = target ? resolvePath(target) : cwd;
       const node = getNode(path);
       if (!node) {
         append(`<span class="t-error">ls: ${esc(target || shortPath(path))}: 없음</span>`);
+        suggestPath(target || shortPath(path), 'ls');
         return;
       }
-      if (node._type === 'post') {
-        const lock = node.is_private ? '<span class="t-priv">🔒</span>' : '';
-        append(`${lock}<span class="t-post-name">${esc(node.slug)}*</span> <span class="t-dim">— ${esc(node.title)}</span>`);
-        return;
-      }
+      if (node._type === 'post') { append(renderNodeName(node.slug, node, true)); return; }
       if (node._type === 'link') {
         const display = target || shortPath(path);
         const shown = display.endsWith('@') ? display : `${display}@`;
@@ -685,24 +748,24 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       }
       const { dirs, posts, links } = lsDir(node);
       const parts = [];
-      for (const d of dirs) parts.push(`<span class="t-dir-name">${esc(d)}/</span>`);
-      for (const p of posts) {
-        const lock = p.is_private ? '<span class="t-priv">🔒</span>' : '';
-        parts.push(`${lock}<span class="t-post-name">${esc(p.k)}</span>*`);
-      }
-      for (const l of links) parts.push(`<span class="t-ok">${esc(l)}@</span>`);
+      for (const d of dirs) parts.push(renderNodeName(d, node[d], long));
+      for (const p of posts) parts.push(renderNodeName(p.k, node[p.k], long));
+      for (const l of links) parts.push(renderNodeName(l, node[l], long));
       if (!parts.length) { append('<span class="t-dim">(비어 있음)</span>'); return; }
-      append(parts.join('  '));
+      append(parts.join(long ? '<br>' : '  '));
     }
 
     function cmdCd(args) {
-      const t = args.trim();
-      if (!t) { cwd = '/home/xmin'; updatePrompt(); return; }
+      const words = shellWords(args);
+      const t = words.join(' ').trim();
+      if (!t) { previousCwd = cwd; cwd = '/home/xmin'; updatePrompt(); return; }
+      if (t === '-') { const next = previousCwd; previousCwd = cwd; cwd = next; updatePrompt(); cmdPwd(); return; }
       const path = resolvePath(t);
       const node = getNode(path);
       if (!node) { append(`<span class="t-error">cd: ${esc(t)}: 디렉터리 없음</span>`); suggestPath(t, 'cd'); return; }
       if (node._type === 'link') { append(`<span class="t-error">cd: ${esc(t)}: 링크입니다</span> <span class="t-dim">열기: <span class="t-ok">open ${esc(t)}</span></span>`); return; }
       if (node._type !== 'dir') { append(`<span class="t-error">cd: ${esc(t)}: 디렉터리가 아님</span>`); return; }
+      previousCwd = cwd;
       cwd = path;
       updatePrompt();
     }
@@ -712,7 +775,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     function findLink(arg) {
       const input = (arg || '').trim();
       if (!input) return null;
-      const clean = input.endsWith('@') ? input.slice(0, -1) : input;
+      const clean = stripDecorativeSuffix(input);
       const path = resolvePath(clean);
       const node = getNode(path);
       if (node?._type === 'link') return { node, path };
@@ -745,8 +808,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
 
     function findPostMatches(arg) {
-      const input = (arg || '').trim();
+      let input = (arg || '').trim();
       if (!input) return [];
+      const decorativePost = input.endsWith('*') && !/[*?]/.test(input.slice(0, -1));
+      if (decorativePost && getNode(resolvePath(input.slice(0, -1)))) {
+        const decoratedPath = resolvePath(input);
+        const slash = decoratedPath.lastIndexOf('/');
+        const decoratedParentPath = slash >= 0 ? decoratedPath.slice(0, slash) || '/' : cwd;
+        const decoratedBasename = slash >= 0 ? decoratedPath.slice(slash + 1) : input;
+        const decoratedParent = getNode(decoratedParentPath);
+        const decoratedRe = globToRegExp(decoratedBasename);
+        const decoratedMatches = decoratedParent && decoratedParent._type === 'dir'
+          ? Object.keys(decoratedParent).filter(k => !isMeta(k) && decoratedParent[k]?._type === 'post' && decoratedRe.test(k)).length
+          : 0;
+        if (decoratedMatches <= 1) input = input.slice(0, -1);
+      }
       const hasGlob = /[*?]/.test(input);
       const path = resolvePath(input);
       const node = getNode(path);
@@ -798,8 +874,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
 
     function cmdCat(args) {
-      const t = args.trim();
+      const t = shellWords(args).join(' ').trim();
       if (!t) { append('<span class="t-error">cat: 인자 필요</span>'); return; }
+      const direct = getNode(resolvePath(stripDecorativeSuffix(t)));
+      if (direct?._type === 'dir') { append(`<span class="t-error">cat: ${esc(t)}: 디렉터리입니다</span> <span class="t-dim">목록: <span class="t-ok">ls ${esc(t)}</span></span>`); return; }
       const link = findLink(t);
       if (link) { append(`<span class="t-ok">${esc(t)}</span> <span class="t-dim">-> ${esc(link.node.url)} · 열기: <span class="t-ok">open ${esc(t)}</span></span>`); return; }
       const matches = findPostMatches(t);
@@ -849,11 +927,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
 
     async function cmdOpen(args) {
-      let raw = args.trim();
+      const words = shellWords(args);
       let newTab = false;
-      raw = raw.replace(/(^|\s)(-n|--new)(?=\s|$)/g, () => { newTab = true; return ' '; }).trim();
-      const target = raw.replace(/^['"]|['"]$/g, '');
+      const targets = [];
+      for (const w of words) {
+        if (w === '-n' || w === '--new') newTab = true;
+        else targets.push(w);
+      }
+      const target = targets.join(' ');
       if (!target) { append('<span class="t-error">open: 인자 필요 (예: open hello-world)</span>'); return; }
+      const direct = getNode(resolvePath(stripDecorativeSuffix(target)));
+      if (direct?._type === 'dir') { append(`<span class="t-error">open: ${esc(target)}: 디렉터리입니다</span> <span class="t-dim">이동: <span class="t-ok">cd ${esc(target)}</span></span>`); return; }
       const link = findLink(target);
       if (link) {
         append(`<span class="t-ok">열기...</span> <span class="t-dim">${esc(link.node.url)}</span>`);
@@ -867,6 +951,23 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       await openWithPasswordCheck(found.node, newTab);
     }
 
+    function cmdTree(args) {
+      const target = shellWords(args).join(' ').trim();
+      const path = target ? resolvePath(target) : cwd;
+      const node = getNode(path);
+      if (!node) { append(`<span class="t-error">tree: ${esc(target || shortPath(path))}: 없음</span>`); return; }
+      const rows = [];
+      function walk(name, n, prefix, depth) {
+        rows.push(`${prefix}${displayNodeName(name, n)}`);
+        if (!n || n._type !== 'dir' || depth >= 2) return;
+        const kids = Object.keys(n).filter(k => !isMeta(k)).sort((a, b) => a.localeCompare(b));
+        kids.slice(0, 40).forEach((k, idx) => walk(k, n[k], prefix + (idx === kids.length - 1 ? '└─ ' : '├─ '), depth + 1));
+        if (kids.length > 40) rows.push(`${prefix}… ${kids.length - 40} more`);
+      }
+      walk(shortPath(path), node, '', 0);
+      append(`<span class="t-dim">${esc(rows.join('\n'))}</span>`.replace(/\n/g, '<br>'));
+    }
+
     function cmdHelp() {
       append('<span class="t-warn">사용 가능한 명령어:</span>');
       append('  <span class="t-ok">whoami</span>         프로필 보기');
@@ -875,13 +976,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       append('  <span class="t-ok">cat</span> &lt;slug&gt;      글 메타 정보 보기');
       append('  <span class="t-ok">open</span> [-n] &lt;path|slug|glob|link&gt;  글/링크 열기 (-n: 새 탭, * 지원)');
       append('  <span class="t-ok">pwd</span>            현재 경로');
+      append('  <span class="t-ok">tree</span> [path]    작은 디렉터리 트리 보기');
       append('  <span class="t-ok">categories</span>     카테고리 전체 목록');
       append('  <span class="t-ok">tags</span>           태그 전체 목록');
       append('  <span class="t-ok">search</span> &lt;q&gt;    제목/설명/태그/슬러그 검색');
       append('  <span class="t-ok">clear</span>          화면 지우기 (Ctrl+L)');
       append('  <span class="t-ok">history</span>        명령어 이력');
       append('  <span class="t-dim">단축키: ↑↓ 이력 · Tab 자동완성 · Ctrl+C 취소 · Ctrl+L 클리어</span>');
-      append('  <span class="t-dim">팁: <span class="t-ok">./posts/테스트/테스트*</span>처럼 경로 실행도 가능</span>');
+      append('  <span class="t-dim">팁: 따옴표/백슬래시 경로, <span class="t-ok">cd -</span>, <span class="t-ok">./posts/테스트/테스트*</span> 지원</span>');
     }
 
     function cmdWhoami() {
@@ -942,8 +1044,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         case 'help': case '?': cmdHelp(); break;
         case 'whoami': cmdWhoami(); break;
         case 'ls': case 'dir': cmdLs(args); break;
+        case 'll': cmdLs('-la ' + args); break;
         case 'cd': cmdCd(args); break;
         case 'pwd': cmdPwd(); break;
+        case 'tree': cmdTree(args); break;
         case 'cat': case 'less': case 'more': cmdCat(args); break;
         case 'open': case 'run': case 'exec': await cmdOpen(args); break;
         case 'categories': case 'cats': cmdCategories(); break;
@@ -963,7 +1067,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     function autocomplete(val) {
       const parts = val.split(/\s+/);
-      const builtins = ['help','whoami','ls','cd','pwd','cat','open','categories','tags','search','history','clear','date','echo','exit'];
+      const builtins = ['help','whoami','ls','ll','cd','pwd','tree','cat','open','categories','tags','search','history','clear','date','echo','exit'];
       if (parts.length <= 1) {
         const partial = parts[0].toLowerCase();
         const matches = builtins.filter(c => c.startsWith(partial));
