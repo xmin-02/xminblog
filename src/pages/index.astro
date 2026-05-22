@@ -563,6 +563,34 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     function isMeta(k) { return k === '_type' || k === 'url' || k === 'slug' || k === 'title' || k === 'description' || k === 'date' || k === 'tags' || k === 'is_private'; }
 
+    const accidentalKoreanMap = {
+      'ㅣㄴ': 'ls',
+      'ㅊㅇ': 'cd',
+      'ㅔㅈㅇ': 'pwd',
+      'ㅐㅔ둗': 'open',
+      'ㅐㅔㄷㅜ': 'open',
+      'ㅊㅁㅅ': 'cat',
+      'ㅗ디ㅔ': 'help',
+      'ㅗㅑㄴ새교': 'history',
+      'ㅊㅣㄷㅁㄱ': 'clear',
+    };
+
+    function normalizeTerminalCommand(cmd) {
+      return accidentalKoreanMap[cmd] || cmd;
+    }
+
+    function splitCommandLine(raw) {
+      const match = raw.trim().match(/^(\S+)(?:\s+([\s\S]*))?$/);
+      return match ? { cmd: match[1], args: match[2] || '' } : { cmd: '', args: '' };
+    }
+
+    function globToRegExp(pattern) {
+      const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+        .replace(/\?/g, '.');
+      return new RegExp(`^${escaped}$`, 'i');
+    }
+
     function getNode(path) {
       const parts = path.split('/').filter(Boolean);
       let node = fs;
@@ -656,26 +684,65 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     function cmdPwd() { append(`<span class="t-dim">${esc(cwd)}</span>`); }
 
-    function findPost(arg) {
-      // Try current dir first
-      let path = resolvePath(arg);
-      let node = getNode(path);
-      if (node && node._type === 'post') return { node, path };
-      // Search all categories for a matching slug
+    function findPostMatches(arg) {
+      const input = (arg || '').trim();
+      if (!input) return [];
+      const hasGlob = /[*?]/.test(input);
+      const path = resolvePath(input);
+      const node = getNode(path);
+      if (!hasGlob && node && node._type === 'post') return [{ node, path }];
+
+      const slash = path.lastIndexOf('/');
+      const parentPath = slash >= 0 ? path.slice(0, slash) || '/' : cwd;
+      const basename = slash >= 0 ? path.slice(slash + 1) : input;
+      const parent = getNode(parentPath);
+      const hasPathSyntax = input.includes('/') || input.startsWith('~');
+      if (hasGlob && parent && parent._type === 'dir') {
+        const re = globToRegExp(basename);
+        const localMatches = Object.keys(parent)
+          .filter(k => !isMeta(k) && parent[k]?._type === 'post' && re.test(k))
+          .sort((a, b) => a.localeCompare(b))
+          .map(k => ({ node: parent[k], path: `${parentPath}/${k}`.replace(/\/+/g, '/') }));
+        if (hasPathSyntax || localMatches.length) return localMatches;
+      }
+
+      const matches = [];
+      const re = hasGlob ? globToRegExp(input) : null;
       for (const catKey of Object.keys(postsDir)) {
         if (isMeta(catKey)) continue;
         const cat = postsDir[catKey];
-        if (cat && cat._type === 'dir' && cat[arg] && cat[arg]._type === 'post') {
-          return { node: cat[arg], path: `/home/xmin/posts/${catKey}/${arg}` };
+        if (!cat || cat._type !== 'dir') continue;
+        for (const slugKey of Object.keys(cat)) {
+          if (isMeta(slugKey) || cat[slugKey]?._type !== 'post') continue;
+          if ((!hasGlob && slugKey === input) || (hasGlob && re.test(slugKey))) {
+            matches.push({ node: cat[slugKey], path: `/home/xmin/posts/${catKey}/${slugKey}` });
+          }
         }
       }
-      return null;
+      return matches.sort((a, b) => a.node.slug.localeCompare(b.node.slug));
+    }
+
+    function findPost(arg) {
+      const matches = findPostMatches(arg);
+      return matches.length === 1 ? matches[0] : null;
+    }
+
+    function renderPostMatches(label, matches, action = 'open') {
+      append(`<span class="t-warn">${esc(label)}: ${matches.length}개 글이 일치합니다. 하나를 더 구체적으로 지정하세요.</span>`);
+      for (const m of matches.slice(0, 12)) {
+        const lock = m.node.is_private ? ' <span class="t-priv">🔒</span>' : '';
+        const displayPath = shortPath(m.path);
+        append(`  <span class="t-post-name">${esc(displayPath)}</span>${lock} <span class="t-dim">— ${esc(m.node.title)}</span> <span class="t-ok">${esc(action)} ${esc(displayPath)}</span>`);
+      }
+      if (matches.length > 12) append(`<span class="t-dim">… ${matches.length - 12}개 더 있음</span>`);
     }
 
     function cmdCat(args) {
       const t = args.trim();
       if (!t) { append('<span class="t-error">cat: 인자 필요</span>'); return; }
-      const found = findPost(t);
+      const matches = findPostMatches(t);
+      if (matches.length > 1) { renderPostMatches('cat', matches, 'cat'); return; }
+      const found = matches[0];
       if (!found) { append(`<span class="t-error">cat: ${esc(t)}: 파일 없음</span>`); return; }
       const n = found.node;
       const tagStr = (n.tags || []).map(x => `<span class="tag">[${esc(x)}]</span>`).join(' ');
@@ -711,16 +778,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
 
     async function cmdOpen(args) {
-      const parts = args.trim().split(/\s+/).filter(Boolean);
+      let raw = args.trim();
       let newTab = false;
-      let slug = '';
-      for (const p of parts) {
-        if (p === '-n' || p === '--new') newTab = true;
-        else slug = p;
-      }
-      if (!slug) { append('<span class="t-error">open: 인자 필요 (예: open hello-world)</span>'); return; }
-      const found = findPost(slug);
-      if (!found) { append(`<span class="t-error">open: ${esc(slug)}: 글 없음</span>`); return; }
+      raw = raw.replace(/(^|\s)(-n|--new)(?=\s|$)/g, () => { newTab = true; return ' '; }).trim();
+      const target = raw.replace(/^['"]|['"]$/g, '');
+      if (!target) { append('<span class="t-error">open: 인자 필요 (예: open hello-world)</span>'); return; }
+      const matches = findPostMatches(target);
+      if (matches.length > 1) { renderPostMatches('open', matches, 'open'); return; }
+      const found = matches[0];
+      if (!found) { append(`<span class="t-error">open: ${esc(target)}: 글 없음</span>`); return; }
       await openWithPasswordCheck(found.node, newTab);
     }
 
@@ -730,7 +796,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       append('  <span class="t-ok">ls</span> [path]      현재/지정 디렉터리 목록');
       append('  <span class="t-ok">cd</span> [path]      디렉터리 이동 (ls posts/ 후 cd posts/&lt;category&gt;)');
       append('  <span class="t-ok">cat</span> &lt;slug&gt;      글 메타 정보 보기');
-      append('  <span class="t-ok">open</span> [-n] &lt;slug&gt;  글 열기 (-n: 새 탭)');
+      append('  <span class="t-ok">open</span> [-n] &lt;path|slug|glob&gt;  글 열기 (-n: 새 탭, * 와일드카드 지원)');
       append('  <span class="t-ok">pwd</span>            현재 경로');
       append('  <span class="t-ok">categories</span>     카테고리 전체 목록');
       append('  <span class="t-ok">tags</span>           태그 전체 목록');
@@ -738,6 +804,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       append('  <span class="t-ok">clear</span>          화면 지우기 (Ctrl+L)');
       append('  <span class="t-ok">history</span>        명령어 이력');
       append('  <span class="t-dim">단축키: ↑↓ 이력 · Tab 자동완성 · Ctrl+C 취소 · Ctrl+L 클리어</span>');
+      append('  <span class="t-dim">팁: <span class="t-ok">./posts/테스트/테스트*</span>처럼 경로 실행도 가능</span>');
     }
 
     function cmdWhoami() {
@@ -789,9 +856,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     async function exec(raw) {
       echoCmd(raw);
-      const parts = raw.split(/\s+/);
-      const cmd = parts[0].toLowerCase();
-      const args = parts.slice(1).join(' ');
+      const parsed = splitCommandLine(raw);
+      const originalCmd = parsed.cmd;
+      const cmd = normalizeTerminalCommand(originalCmd.toLowerCase());
+      const args = parsed.args;
+      if (cmd !== originalCmd.toLowerCase()) append(`<span class="t-dim">↳ ${esc(cmd)} 로 해석</span>`);
       switch (cmd) {
         case 'help': case '?': cmdHelp(); break;
         case 'whoami': cmdWhoami(); break;
@@ -809,8 +878,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         case 'echo': append(esc(args)); break;
         case 'exit': case 'logout': append('<span class="t-dim">bye ✦</span>'); input.disabled = true; break;
         default:
-          if (cmd.startsWith('./')) await cmdOpen(cmd.slice(2) + (args ? ' ' + args : ''));
-          else append(`<span class="t-error">command not found: ${esc(cmd)}</span> <span class="t-dim">(help 입력)</span>`);
+          if (originalCmd.startsWith('./')) await cmdOpen(originalCmd.slice(2) + (args ? ' ' + args : ''));
+          else if (originalCmd.includes('/') || findPostMatches(originalCmd).length) await cmdOpen(originalCmd + (args ? ' ' + args : ''));
+          else append(`<span class="t-error">command not found: ${esc(originalCmd)}</span> <span class="t-dim">(help 입력)</span>`);
       }
     }
 
