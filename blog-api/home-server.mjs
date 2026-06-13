@@ -188,15 +188,39 @@ class LocalUploads {
 async function initDb(db) {
   if (dbDriver === 'postgres') {
     await db.exec(readFileSync(new URL('./schema.postgres.sql', import.meta.url), 'utf8'));
+    await db.exec(`
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'manual';
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS source_url TEXT NOT NULL DEFAULT '';
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS source_id TEXT NOT NULL DEFAULT '';
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS auto_generated BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS review_status TEXT NOT NULL DEFAULT 'published';
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS reviewed_at BIGINT;
+      CREATE INDEX IF NOT EXISTS idx_posts_review ON posts(review_status, draft, updated_at);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_source_id ON posts(source_type, source_id) WHERE source_id <> '';
+    `);
     return;
   }
 
   db.exec(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'));
 
-  const columns = db.prepare('PRAGMA table_info(users)').all().results.map(row => row.name);
-  if (!columns.includes('avatar_url')) {
+  const userColumns = db.prepare('PRAGMA table_info(users)').all().results.map(row => row.name);
+  if (!userColumns.includes('avatar_url')) {
     db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT;');
   }
+  const postColumns = db.prepare('PRAGMA table_info(posts)').all().results.map(row => row.name);
+  const addPostColumn = (name, sql) => {
+    if (!postColumns.includes(name)) db.exec(sql);
+  };
+  addPostColumn('source_type', "ALTER TABLE posts ADD COLUMN source_type TEXT NOT NULL DEFAULT 'manual';");
+  addPostColumn('source_url', "ALTER TABLE posts ADD COLUMN source_url TEXT NOT NULL DEFAULT '';");
+  addPostColumn('source_id', "ALTER TABLE posts ADD COLUMN source_id TEXT NOT NULL DEFAULT '';");
+  addPostColumn('auto_generated', 'ALTER TABLE posts ADD COLUMN auto_generated INTEGER NOT NULL DEFAULT 0;');
+  addPostColumn('review_status', "ALTER TABLE posts ADD COLUMN review_status TEXT NOT NULL DEFAULT 'published';");
+  addPostColumn('reviewed_at', 'ALTER TABLE posts ADD COLUMN reviewed_at INTEGER;');
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_posts_review ON posts(review_status, draft, updated_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_source_id ON posts(source_type, source_id) WHERE source_id <> '';
+  `);
 }
 
 function toRequest(req) {

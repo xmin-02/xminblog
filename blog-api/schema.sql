@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS posts (
   cover TEXT NOT NULL DEFAULT '',
   is_private INTEGER NOT NULL DEFAULT 0,
   password_hash TEXT,
+  source_type TEXT NOT NULL DEFAULT 'manual',
+  source_url TEXT NOT NULL DEFAULT '',
+  source_id TEXT NOT NULL DEFAULT '',
+  auto_generated INTEGER NOT NULL DEFAULT 0,
+  review_status TEXT NOT NULL DEFAULT 'published',
+  reviewed_at INTEGER,
   content TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
@@ -62,3 +68,5 @@ CREATE TABLE IF NOT EXISTS posts (
 
 CREATE INDEX IF NOT EXISTS idx_posts_date ON posts(date);
 CREATE INDEX IF NOT EXISTS idx_posts_visibility ON posts(draft, is_private);
+CREATE INDEX IF NOT EXISTS idx_posts_review ON posts(review_status, draft, updated_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_source_id ON posts(source_type, source_id) WHERE source_id <> '';

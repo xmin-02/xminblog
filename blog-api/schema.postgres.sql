@@ -53,6 +53,12 @@ CREATE TABLE IF NOT EXISTS posts (
   cover TEXT NOT NULL DEFAULT '',
   is_private BOOLEAN NOT NULL DEFAULT false,
   password_hash TEXT,
+  source_type TEXT NOT NULL DEFAULT 'manual',
+  source_url TEXT NOT NULL DEFAULT '',
+  source_id TEXT NOT NULL DEFAULT '',
+  auto_generated BOOLEAN NOT NULL DEFAULT false,
+  review_status TEXT NOT NULL DEFAULT 'published',
+  reviewed_at BIGINT,
   content TEXT NOT NULL DEFAULT '',
   created_at BIGINT NOT NULL DEFAULT (extract(epoch from now())::bigint),
   updated_at BIGINT NOT NULL DEFAULT (extract(epoch from now())::bigint)
@@ -60,3 +66,5 @@ CREATE TABLE IF NOT EXISTS posts (
 
 CREATE INDEX IF NOT EXISTS idx_posts_date ON posts(date);
 CREATE INDEX IF NOT EXISTS idx_posts_visibility ON posts(draft, is_private);
+CREATE INDEX IF NOT EXISTS idx_posts_review ON posts(review_status, draft, updated_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_source_id ON posts(source_type, source_id) WHERE source_id <> '';
