@@ -11,6 +11,11 @@ zone_name = "xmin.blog"
 #   GITHUB_TOKEN   — GitHub Personal Access Token with repo write access
 #   ADMIN_PASSWORD — Plain-text admin password (worker hashes and compares)
 #   JWT_SECRET     — Random secret for signing JWTs (e.g. openssl rand -hex 32)
+#   APNS_KEY_ID    — Apple Push Notifications auth key ID
+#   APNS_TEAM_ID   — Apple Developer team ID
+#   APNS_PRIVATE_KEY — Apple .p8 private key, with newlines preserved or escaped as \n
+# Vars:
+#   APNS_TOPIC     — iOS app bundle identifier, e.g. sh.xmin.blogadmin
 
 [[d1_databases]]
 binding = "DB"

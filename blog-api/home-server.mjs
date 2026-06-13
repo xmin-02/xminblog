@@ -7,6 +7,7 @@
  * PostgreSQL on vm-db; SQLite remains available only for local smoke tests.
  */
 import { createServer } from 'node:http';
+import { connect as connectHttp2 } from 'node:http2';
 import { Readable } from 'node:stream';
 import { createReadStream, mkdirSync, readFileSync } from 'node:fs';
 import { stat, writeFile } from 'node:fs/promises';
@@ -277,6 +278,42 @@ async function createDb() {
   throw new Error(`Unsupported DB_DRIVER: ${dbDriver}`);
 }
 
+function sendApnsHttp2({ url, headers, body, timeoutMs }) {
+  return new Promise((resolve, reject) => {
+    const endpoint = new URL(url);
+    const client = connectHttp2(endpoint.origin);
+    let settled = false;
+    let status = 0;
+    let responseBody = '';
+    let timer;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      client.close();
+      fn(value);
+    };
+    timer = setTimeout(() => finish(reject, new Error('APNs request timed out')), timeoutMs);
+
+    client.on('error', error => finish(reject, error));
+    const stream = client.request({
+      ':method': 'POST',
+      ':path': `${endpoint.pathname}${endpoint.search}`,
+      ...headers,
+    });
+    stream.setEncoding('utf8');
+    stream.on('response', responseHeaders => {
+      status = Number(responseHeaders[':status'] || 0);
+    });
+    stream.on('data', chunk => {
+      responseBody += chunk;
+    });
+    stream.on('end', () => finish(resolve, { status, body: responseBody }));
+    stream.on('error', error => finish(reject, error));
+    stream.end(body);
+  });
+}
+
 const DB = await createDb();
 await initDb(DB);
 
@@ -290,6 +327,11 @@ const env = {
   GITHUB_REPO: process.env.GITHUB_REPO,
   GITHUB_BRANCH: process.env.GITHUB_BRANCH,
   CONTENT_BACKEND: process.env.CONTENT_BACKEND || 'db',
+  APNS_KEY_ID: process.env.APNS_KEY_ID,
+  APNS_TEAM_ID: process.env.APNS_TEAM_ID,
+  APNS_PRIVATE_KEY: process.env.APNS_PRIVATE_KEY,
+  APNS_TOPIC: process.env.APNS_TOPIC,
+  APNS_SEND: sendApnsHttp2,
   UPLOADS: new LocalUploads(uploadDir, publicUploadBase),
   DB,
 };

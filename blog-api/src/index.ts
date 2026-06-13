@@ -15,6 +15,7 @@
  *   POST   /api/admin/review-posts/:slug/approve   — mark reviewed, keep draft
  *   POST   /api/admin/review-posts/:slug/publish   — publish reviewed post
  *   POST   /api/admin/review-posts/:slug/reject    — reject reviewed post
+ *   POST   /api/admin/notifications/test           — send a test APNs notification
  *
  * Auth routes:
  *   POST   /api/auth/signup     — register (email + password + optional nickname)
@@ -35,9 +36,17 @@
  *   GET    /api/likes/:slug     — like count + whether current user liked
  *   POST   /api/likes/:slug     — toggle like (auth required)
  *
- * Secrets: GITHUB_TOKEN, ADMIN_PASSWORD, JWT_SECRET
+ * Secrets: GITHUB_TOKEN, ADMIN_PASSWORD, JWT_SECRET, APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY
  * D1 binding: DB
  */
+
+type ApnsSendRequest = {
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+  timeoutMs: number;
+};
+type ApnsSendResponse = { status: number; body: string };
 
 export interface Env {
   GITHUB_TOKEN: string;
@@ -52,6 +61,11 @@ export interface Env {
   CONTENT_BACKEND?: string;
   UPLOADS?: { put(file: File, request: Request): Promise<string> };
   COMMENT_BLOCKLIST?: string;
+  APNS_KEY_ID?: string;
+  APNS_TEAM_ID?: string;
+  APNS_PRIVATE_KEY?: string;
+  APNS_TOPIC?: string;
+  APNS_SEND?: (request: ApnsSendRequest) => Promise<ApnsSendResponse>;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -587,6 +601,8 @@ const PUSH_NOTIFICATION_EVENTS = [
   'weeklyDigest',
 ] as const;
 
+type PushNotificationEvent = typeof PUSH_NOTIFICATION_EVENTS[number];
+
 const PUSH_NOTIFICATION_EVENT_SET = new Set<string>(PUSH_NOTIFICATION_EVENTS);
 const DEFAULT_PUSH_NOTIFICATION_EVENTS: Record<string, boolean> = Object.fromEntries(
   PUSH_NOTIFICATION_EVENTS.map(event => [event, event !== 'weeklyDigest']),
@@ -813,6 +829,348 @@ async function disablePushSubscription(request: Request, env: Env, origin: strin
   return json({ disabled: result.meta?.changes ?? 0 }, 200, origin);
 }
 
+// ─── Admin push notification delivery ────────────────────────────────────────
+
+type PushSubscriptionDeliveryRow = {
+  id: number;
+  user_id: number;
+  platform: PushPlatform;
+  token: string;
+  environment: PushEnvironment;
+  bundle_id: string | null;
+  events: string | null;
+  include_sensitive_preview: unknown;
+  quiet_hours_enabled: unknown;
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
+  timezone: string | null;
+};
+
+type AdminPushNotification = {
+  title: string;
+  body: string;
+  genericTitle?: string;
+  genericBody?: string;
+  url?: string;
+  data?: Record<string, unknown>;
+  critical?: boolean;
+};
+
+type AdminPushResult = {
+  configured: boolean;
+  subscribers: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  disabled: number;
+  results: Array<{
+    subscription_id: number;
+    status: 'sent' | 'failed' | 'skipped' | 'disabled';
+    reason?: string;
+    apns_status?: number;
+  }>;
+};
+
+type ApnsConfig = {
+  keyId: string;
+  teamId: string;
+  privateKey: string;
+};
+
+let cachedApnsProviderToken: { cacheKey: string; token: string; expiresAt: number } | null = null;
+
+function apnsConfig(env: Env): ApnsConfig | null {
+  const keyId = env.APNS_KEY_ID?.trim();
+  const teamId = env.APNS_TEAM_ID?.trim();
+  const privateKey = env.APNS_PRIVATE_KEY?.trim().replace(/\\n/g, '\n');
+  if (!keyId || !teamId || !privateKey) return null;
+  return { keyId, teamId, privateKey };
+}
+
+function pemToArrayBuffer(pem: string): ArrayBuffer {
+  const base64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+    .replace(/-----END PRIVATE KEY-----/g, '')
+    .replace(/\s+/g, '');
+  const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+
+async function apnsProviderToken(config: ApnsConfig): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const cacheKey = await sha256hex(`${config.keyId}:${config.teamId}:${config.privateKey}`);
+  if (cachedApnsProviderToken?.cacheKey === cacheKey && cachedApnsProviderToken.expiresAt > now + 60) {
+    return cachedApnsProviderToken.token;
+  }
+
+  const header = b64url(new TextEncoder().encode(JSON.stringify({ alg: 'ES256', kid: config.keyId })));
+  const claims = b64url(new TextEncoder().encode(JSON.stringify({ iss: config.teamId, iat: now })));
+  const signingInput = `${header}.${claims}`;
+  const key = await crypto.subtle.importKey(
+    'pkcs8',
+    pemToArrayBuffer(config.privateKey),
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    key,
+    new TextEncoder().encode(signingInput),
+  );
+  const token = `${signingInput}.${b64url(signature)}`;
+  cachedApnsProviderToken = { cacheKey, token, expiresAt: now + 45 * 60 };
+  return token;
+}
+
+function apnsHost(environment: PushEnvironment): string {
+  return environment === 'sandbox'
+    ? 'https://api.sandbox.push.apple.com'
+    : 'https://api.push.apple.com';
+}
+
+async function postApns(env: Env, request: ApnsSendRequest): Promise<ApnsSendResponse> {
+  if (env.APNS_SEND) return env.APNS_SEND(request);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), request.timeoutMs);
+  try {
+    const response = await fetch(request.url, {
+      method: 'POST',
+      headers: request.headers,
+      body: request.body,
+      signal: controller.signal,
+    });
+    return { status: response.status, body: await response.text() };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseClockMinutes(value: string | null | undefined, fallback: string): number {
+  const time = value && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : fallback;
+  const [hour, minute] = time.split(':').map(Number);
+  return hour * 60 + minute;
+}
+
+function currentMinutesInTimezone(timezone: string | null | undefined): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: timezone || 'UTC',
+    }).formatToParts(new Date());
+    const hour = Number(parts.find(part => part.type === 'hour')?.value ?? 0) % 24;
+    const minute = Number(parts.find(part => part.type === 'minute')?.value ?? 0);
+    return hour * 60 + minute;
+  } catch {
+    const now = new Date();
+    return now.getUTCHours() * 60 + now.getUTCMinutes();
+  }
+}
+
+function isWithinQuietHours(now: number, start: number, end: number): boolean {
+  if (start === end) return true;
+  if (start < end) return now >= start && now < end;
+  return now >= start || now < end;
+}
+
+function pushData(data: Record<string, unknown> | undefined): Record<string, string> {
+  const clean: Record<string, string> = {};
+  if (!data) return clean;
+  for (const [key, value] of Object.entries(data)) {
+    if (!/^[a-zA-Z0-9_-]{1,40}$/.test(key) || value === undefined || value === null) continue;
+    clean[key] = String(value).slice(0, 300);
+  }
+  return clean;
+}
+
+async function disablePushSubscriptionById(id: number, env: Env): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.prepare(`
+    UPDATE push_subscriptions
+    SET enabled = ?, disabled_at = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(false, now, now, id).run();
+}
+
+async function sendApnsNotification(
+  row: PushSubscriptionDeliveryRow,
+  event: PushNotificationEvent,
+  notification: AdminPushNotification,
+  env: Env,
+  config: ApnsConfig,
+): Promise<{ status: 'sent' | 'failed' | 'disabled'; reason?: string; apns_status?: number }> {
+  const topic = env.APNS_TOPIC?.trim() || row.bundle_id?.trim();
+  if (!topic) return { status: 'failed', reason: 'Missing APNs topic' };
+
+  const token = await apnsProviderToken(config);
+  const title = dbBool(row.include_sensitive_preview)
+    ? notification.title
+    : notification.genericTitle || notification.title;
+  const body = dbBool(row.include_sensitive_preview)
+    ? notification.body
+    : notification.genericBody || '블로그에서 새 알림이 도착했습니다.';
+  const payload = {
+    aps: {
+      alert: { title, body },
+      sound: 'default',
+    },
+    event,
+    ...(notification.url ? { url: notification.url } : {}),
+    ...pushData(notification.data),
+  };
+  const bodyText = JSON.stringify(payload);
+  const response = await postApns(env, {
+    url: `${apnsHost(row.environment)}/3/device/${row.token}`,
+    timeoutMs: 4000,
+    body: bodyText,
+    headers: {
+      authorization: `bearer ${token}`,
+      'apns-topic': topic,
+      'apns-push-type': 'alert',
+      'apns-priority': '10',
+      'content-type': 'application/json',
+      'content-length': String(new TextEncoder().encode(bodyText).byteLength),
+    },
+  });
+
+  if (response.status >= 200 && response.status < 300) return { status: 'sent' };
+
+  let reason = response.body || `APNs ${response.status}`;
+  try {
+    const parsed = JSON.parse(response.body) as { reason?: string };
+    reason = parsed.reason || reason;
+  } catch { /* APNs usually returns JSON, but keep raw body if it does not. */ }
+
+  if (response.status === 410 || reason === 'BadDeviceToken' || reason === 'Unregistered') {
+    await disablePushSubscriptionById(row.id, env);
+    return { status: 'disabled', reason, apns_status: response.status };
+  }
+  return { status: 'failed', reason, apns_status: response.status };
+}
+
+async function notifyAdminSubscribers(
+  env: Env,
+  event: PushNotificationEvent,
+  notification: AdminPushNotification,
+): Promise<AdminPushResult> {
+  const config = apnsConfig(env);
+  const empty: AdminPushResult = {
+    configured: !!config,
+    subscribers: 0,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    disabled: 0,
+    results: [],
+  };
+  if (!config) return empty;
+
+  const rows = await env.DB.prepare(`
+    SELECT ps.id, ps.user_id, ps.platform, ps.token, ps.environment, ps.bundle_id, ps.events,
+      ps.include_sensitive_preview, ps.quiet_hours_enabled, ps.quiet_hours_start, ps.quiet_hours_end,
+      ps.timezone
+    FROM push_subscriptions ps
+      JOIN users u ON u.id = ps.user_id
+    WHERE ps.enabled = ? AND u.role = ?
+    ORDER BY ps.updated_at DESC
+    LIMIT 100
+  `).bind(true, 'admin').all<PushSubscriptionDeliveryRow>();
+
+  const summary: AdminPushResult = { ...empty, subscribers: rows.results?.length ?? 0 };
+  for (const row of rows.results ?? []) {
+    if (row.platform !== 'ios') {
+      summary.skipped += 1;
+      summary.results.push({ subscription_id: row.id, status: 'skipped', reason: 'Unsupported platform' });
+      continue;
+    }
+
+    const events = parsePushEvents(row.events);
+    if (!events[event]) {
+      summary.skipped += 1;
+      summary.results.push({ subscription_id: row.id, status: 'skipped', reason: 'Event disabled' });
+      continue;
+    }
+
+    if (!notification.critical && dbBool(row.quiet_hours_enabled)) {
+      const now = currentMinutesInTimezone(row.timezone);
+      const start = parseClockMinutes(row.quiet_hours_start, '22:00');
+      const end = parseClockMinutes(row.quiet_hours_end, '08:00');
+      if (isWithinQuietHours(now, start, end)) {
+        summary.skipped += 1;
+        summary.results.push({ subscription_id: row.id, status: 'skipped', reason: 'Quiet hours' });
+        continue;
+      }
+    }
+
+    try {
+      const result = await sendApnsNotification(row, event, notification, env, config);
+      if (result.status === 'sent') summary.sent += 1;
+      if (result.status === 'failed') summary.failed += 1;
+      if (result.status === 'disabled') summary.disabled += 1;
+      summary.results.push({ subscription_id: row.id, ...result });
+    } catch (err) {
+      summary.failed += 1;
+      summary.results.push({ subscription_id: row.id, status: 'failed', reason: (err as Error).message });
+    }
+  }
+  return summary;
+}
+
+async function notifyAdminsBestEffort(
+  env: Env,
+  event: PushNotificationEvent,
+  notification: AdminPushNotification,
+): Promise<void> {
+  try {
+    await notifyAdminSubscribers(env, event, notification);
+  } catch (err) {
+    console.error(`admin push notification failed: ${(err as Error).message}`);
+  }
+}
+
+function enqueueAdminNotification(
+  ctx: ExecutionContext | undefined,
+  env: Env,
+  event: PushNotificationEvent,
+  notification: AdminPushNotification,
+): void {
+  const task = notifyAdminsBestEffort(env, event, notification);
+  if (ctx) ctx.waitUntil(task);
+}
+
+function reviewDraftEvent(sourceType: string | null | undefined): PushNotificationEvent {
+  const normalized = String(sourceType ?? '').toLowerCase();
+  if (normalized.includes('cve')) return 'cveDraftCreated';
+  if (normalized.includes('security')) return 'securityNewsDraftCreated';
+  return 'reviewCreated';
+}
+
+async function sendTestAdminNotification(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const admin = await requireAdminRequest(request, env, origin);
+  if (admin instanceof Response) return admin;
+
+  let body: Record<string, unknown> = {};
+  try { body = await request.json() as Record<string, unknown>; } catch { /* empty test body is fine */ }
+
+  const eventInput = String(body.event ?? 'reviewCreated');
+  const event = PUSH_NOTIFICATION_EVENT_SET.has(eventInput)
+    ? eventInput as PushNotificationEvent
+    : 'reviewCreated';
+  const title = cleanPushText(body.title, 80) || 'xmin.blog 테스트 알림';
+  const message = cleanPushText(body.body, 180) || '관리 앱 알림 연결이 정상적으로 동작합니다.';
+  const summary = await notifyAdminSubscribers(env, event, {
+    title,
+    body: message,
+    genericBody: '관리 앱 테스트 알림입니다.',
+    critical: true,
+    data: { test: true },
+  });
+  return json(summary, 200, origin);
+}
+
 // ─── Auth handlers ────────────────────────────────────────────────────────────
 
 async function handleSignup(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -998,7 +1356,7 @@ async function getComments(slug: string, env: Env, origin: string | null): Promi
   return json(rows.results ?? [], 200, origin);
 }
 
-async function addComment(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
+async function addComment(slug: string, request: Request, env: Env, origin: string | null, ctx?: ExecutionContext): Promise<Response> {
   const invalid = await validatePostSlug(slug, env, origin);
   if (invalid) return invalid;
   const user = await getAuthUser(request, env);
@@ -1031,6 +1389,13 @@ async function addComment(slug: string, request: Request, env: Env, origin: stri
   ).bind(slug, userId, content).first<{ id: number; created_at: number }>();
 
   if (!result) return json({ error: 'Failed to save comment' }, 500, origin);
+  enqueueAdminNotification(ctx, env, 'commentCreated', {
+    title: '새 댓글',
+    body: `${nickname}: ${content.slice(0, 120)}`,
+    genericBody: '블로그에 새 댓글이 달렸습니다.',
+    url: postCanonicalUrl(slug),
+    data: { slug, comment_id: result.id },
+  });
   return json({ id: result.id, content, created_at: result.created_at, nickname, avatar_url: avatarUrl, user_id: userId }, 201, origin);
 }
 
@@ -1068,7 +1433,7 @@ async function getLikes(slug: string, request: Request, env: Env, origin: string
   return json({ count, liked }, 200, origin);
 }
 
-async function toggleLike(slug: string, request: Request, env: Env, origin: string | null): Promise<Response> {
+async function toggleLike(slug: string, request: Request, env: Env, origin: string | null, ctx?: ExecutionContext): Promise<Response> {
   const invalid = await validatePostSlug(slug, env, origin);
   if (invalid) return invalid;
   const user = await getAuthUser(request, env);
@@ -1080,6 +1445,13 @@ async function toggleLike(slug: string, request: Request, env: Env, origin: stri
     await env.DB.prepare('DELETE FROM likes WHERE post_slug = ? AND user_id = ?').bind(slug, userId).run();
   } else {
     await env.DB.prepare('INSERT INTO likes (post_slug, user_id) VALUES (?, ?)').bind(slug, userId).run();
+    enqueueAdminNotification(ctx, env, 'likeCreated', {
+      title: '새 좋아요',
+      body: `${slug} 글에 좋아요가 눌렸습니다.`,
+      genericBody: '블로그 글에 새 좋아요가 눌렸습니다.',
+      url: postCanonicalUrl(slug),
+      data: { slug },
+    });
   }
 
   const countRow = await env.DB.prepare('SELECT COUNT(*) as count FROM likes WHERE post_slug = ?').bind(slug).first<{ count: number }>();
@@ -1302,7 +1674,7 @@ async function preparePrivateFields(payload: PostPayload, existingHash?: string)
   return undefined;
 }
 
-async function createPost(payload: PostPayload, env: Env, origin: string | null): Promise<Response> {
+async function createPost(payload: PostPayload, env: Env, origin: string | null, ctx?: ExecutionContext): Promise<Response> {
   const slug = slugify(payload.title);
   if (!slug) return json({ error: 'Could not derive slug from title' }, 400, origin);
   if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
@@ -1346,6 +1718,20 @@ async function createPost(payload: PostPayload, env: Env, origin: string | null)
       payload.content,
       Math.floor(Date.now() / 1000),
     ).run();
+    if (reviewMeta.review_status === 'pending' || reviewMeta.auto_generated || payload.draft) {
+      const event = reviewDraftEvent(reviewMeta.source_type);
+      enqueueAdminNotification(ctx, env, event, {
+        title: event === 'cveDraftCreated'
+          ? 'CVE 초안 생성'
+          : event === 'securityNewsDraftCreated'
+            ? '보안 뉴스 초안 생성'
+            : '검수 초안 생성',
+        body: `${payload.title} 초안이 검수를 기다립니다.`,
+        genericBody: '새 검수 초안이 생성되었습니다.',
+        url: `${SITE}/admin/review-posts/${encodeURIComponent(slug)}`,
+        data: { slug, source_type: reviewMeta.source_type },
+      });
+    }
     return json({ slug, message: 'Post created' }, 201, origin);
   }
 
@@ -1552,7 +1938,7 @@ async function updateReviewPost(slug: string, request: Request, env: Env, origin
   return updatePost(slug, next, env, origin);
 }
 
-async function setReviewPostStatus(slug: string, action: 'approve' | 'publish' | 'reject', request: Request, env: Env, origin: string | null): Promise<Response> {
+async function setReviewPostStatus(slug: string, action: 'approve' | 'publish' | 'reject', request: Request, env: Env, origin: string | null, ctx?: ExecutionContext): Promise<Response> {
   const admin = await requireAdminRequest(request, env, origin);
   if (admin instanceof Response) return admin;
   const backendError = reviewBackendRequired(env, origin);
@@ -1580,6 +1966,15 @@ async function setReviewPostStatus(slug: string, action: 'approve' | 'publish' |
 
   const updated = await readPostRow(slug, env);
   if (!updated) return json({ error: 'Post not found after update' }, 404, origin);
+  if (action === 'publish') {
+    enqueueAdminNotification(ctx, env, 'publishCompleted', {
+      title: '게시 완료',
+      body: `${updated.title ?? slug} 글이 게시되었습니다.`,
+      genericBody: '검수한 글이 게시되었습니다.',
+      url: postCanonicalUrl(slug),
+      data: { slug },
+    });
+  }
   return json({ ...dbPostSummary(updated, true), content: updated.content ?? '' }, 200, origin);
 }
 
@@ -1822,7 +2217,7 @@ async function uploadAvatar(request: Request, env: Env, origin: string | null): 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const origin = request.headers.get('Origin');
     const method = request.method.toUpperCase();
@@ -1884,6 +2279,11 @@ export default {
     if (url.pathname === '/api/admin/stats' && method === 'GET') {
       return getAdminStats(request, env, origin);
     }
+    if (url.pathname === '/api/admin/notifications/test' && method === 'POST') {
+      const limited = rateLimit(request, 'notification-test', 10, 60 * 10, origin);
+      if (limited) return limited;
+      return sendTestAdminNotification(request, env, origin);
+    }
     const reviewMatch = url.pathname.match(/^\/api\/admin\/review-posts(?:\/([^/]+)(?:\/(approve|publish|reject))?)?$/);
     if (reviewMatch) {
       const slug = reviewMatch[1] ? decodeURIComponent(reviewMatch[1]) : null;
@@ -1891,7 +2291,7 @@ export default {
       if (!slug && !action && method === 'GET') return listReviewPosts(request, env, origin);
       if (slug && !action && method === 'GET') return getReviewPost(slug, request, env, origin);
       if (slug && !action && method === 'PUT') return updateReviewPost(slug, request, env, origin);
-      if (slug && action && method === 'POST') return setReviewPostStatus(slug, action, request, env, origin);
+      if (slug && action && method === 'POST') return setReviewPostStatus(slug, action, request, env, origin, ctx);
       return json({ error: 'Method not allowed' }, 405, origin);
     }
     if (url.pathname === '/api/upload' && method === 'POST') {
@@ -1923,7 +2323,7 @@ export default {
       if (method === 'POST') {
         const limited = rateLimit(request, 'comments', 20, 60 * 10, origin);
         if (limited) return limited;
-        return addComment(slug, request, env, origin);
+        return addComment(slug, request, env, origin, ctx);
       }
       return json({ error: 'Method not allowed' }, 405, origin);
     }
@@ -1936,7 +2336,7 @@ export default {
       if (method === 'POST') {
         const limited = rateLimit(request, 'likes', 60, 60, origin);
         if (limited) return limited;
-        return toggleLike(slug, request, env, origin);
+        return toggleLike(slug, request, env, origin, ctx);
       }
       return json({ error: 'Method not allowed' }, 405, origin);
     }
@@ -1978,7 +2378,7 @@ export default {
       if (!p.title || !p.date || !p.category || !p.content) {
         return json({ error: 'title, date, category, and content are required' }, 400, origin);
       }
-      return createPost(p, env, origin);
+      return createPost(p, env, origin, ctx);
     }
     if (method === 'PUT' && slug) {
       const p = body as PostPayload;
