@@ -1,0 +1,79 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout
+  title="CVE — xmin.blog"
+  description="신규 CVE와 취약점 동향을 추적하는 xmin.blog 채널"
+  active={4}
+  path="cve"
+  maxWidth={960}
+>
+  <section class="v11-channel">
+    <div class="v11-dim v11-channel-cmd"><span class="v11-gr">$</span> tail -f feeds/cve.log</div>
+    <h1 class="v11-sans v11-channel-title"><span class="v11-gr">cve</span> watch</h1>
+    <p class="v11-sans v11-channel-copy">
+      신규 CVE와 공개 익스플로잇, 벤더 어드바이저리를 추적하는 공간입니다. 자동 수집은 초안으로 만들고,
+      중요도와 재현 가능성을 검토한 뒤 게시하는 흐름으로 운영할 예정입니다.
+    </p>
+
+    <div class="v11-channel-panel">
+      <div class="v11-channel-panel-head">
+        <span><span class="v11-gr">$</span> ls posts/ --tag cve</span>
+        <span class="v11-dim" id="cve-count">syncing…</span>
+      </div>
+      <div id="cve-posts">
+        <div class="v11-dim v11-channel-empty">CVE 글을 불러오는 중…<span class="v11-cursor"></span></div>
+      </div>
+    </div>
+
+    <div class="v11-channel-notes">
+      <span class="lvl lvl-ok">src</span> NVD · CVE.org · CISA KEV · vendor advisories
+      <span class="v11-dim">/ filters: severity · exploitability · affected stack</span>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+  const wantedTags = ['cve', 'cves'];
+  const cveIdPattern = /\bCVE-\d{4}-\d{4,}\b/i;
+
+  function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function postUrl(slug){return `/post/?slug=${encodeURIComponent(slug)}`;}
+  function fmtDate(d){try{return new Date(d).toISOString().slice(0,10);}catch{return'';}}
+  function hasWantedTag(post){
+    const tags = (post.tags || []).map((tag) => String(tag).toLowerCase());
+    const title = String(post.title || '').toLowerCase();
+    return wantedTags.some((tag) => tags.includes(tag)) || cveIdPattern.test(title);
+  }
+  function render(posts){
+    const list = document.getElementById('cve-posts');
+    const count = document.getElementById('cve-count');
+    count.textContent = `${posts.length} entries`;
+    if (!posts.length) {
+      list.innerHTML = '<div class="v11-dim v11-channel-empty">아직 CVE 채널 글이 없습니다. 자동화 초안 파이프라인을 붙이면 여기에 모입니다.</div>';
+      return;
+    }
+    list.innerHTML = posts.map((post) => `<a class="v11-channel-row" href="${postUrl(post.slug)}">
+      <span class="v11-dim">${esc(fmtDate(post.date))}</span>
+      <span>
+        <span class="v11-channel-row-title">${esc(post.title)}</span>
+        ${post.description ? `<span class="v11-channel-row-desc">${esc(post.description)}</span>` : ''}
+      </span>
+      <span class="v11-dim">${(post.tags || []).slice(0, 2).map((tag) => `#${esc(tag)}`).join(' ')}</span>
+    </a>`).join('');
+  }
+  async function load(){
+    try {
+      const response = await fetch(`${API_BASE}/api/posts`);
+      if (!response.ok) throw new Error('load failed');
+      const posts = await response.json();
+      render(posts.filter(hasWantedTag));
+    } catch {
+      document.getElementById('cve-count').textContent = 'offline';
+      document.getElementById('cve-posts').innerHTML = '<div class="v11-dim v11-channel-empty">포스트 API를 불러오지 못했습니다.</div>';
+    }
+  }
+  load();
+</script>

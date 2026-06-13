@@ -473,6 +473,98 @@ a:hover { color: var(--color-green-br); text-decoration: underline; text-underli
   border-color: rgba(63,185,80,0.33) !important;
 }
 
+/* ── channel pages (CVE / security news) ── */
+.v11-channel {
+  padding: 34px 0 38px;
+}
+.v11-channel-cmd {
+  font-size: 12px;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+}
+.v11-channel-title {
+  margin: 0 0 10px;
+  font-size: 31px;
+  line-height: 1.2;
+  color: var(--color-fg);
+}
+.v11-channel-copy {
+  max-width: 720px;
+  margin: 0 0 24px;
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 1.85;
+}
+.v11-channel-panel {
+  border: 1px solid var(--color-border);
+  background: var(--color-panel);
+}
+.v11-channel-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.v11-channel-empty {
+  padding: 16px 14px;
+  font-size: 12.5px;
+}
+.v11-channel-row {
+  display: grid;
+  grid-template-columns: 92px 1fr 72px;
+  gap: 14px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--color-border);
+  color: inherit;
+  align-items: baseline;
+}
+.v11-channel-row:last-child {
+  border-bottom: 0;
+}
+.v11-channel-row:hover {
+  text-decoration: none;
+}
+.v11-channel-row:hover .v11-channel-row-title {
+  color: var(--color-green-br);
+}
+.v11-channel-row-title {
+  display: block;
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.v11-channel-row-desc {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-subtle);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.v11-channel-notes {
+  margin-top: 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-subtle);
+  line-height: 1.8;
+}
+
+@media (max-width: 640px) {
+  .v11-channel-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  .v11-channel-panel-head {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .v11-cursor { animation: none; }

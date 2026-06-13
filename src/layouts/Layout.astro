@@ -7,7 +7,7 @@ interface Props {
   canonical?: string;
   noindex?: boolean;
   ogType?: string;
-  /** Active local-nav index: 0 home · 1 posts · 2 tags · 3 about · 4 rss. Auto-detected if omitted. */
+  /** Active local-nav index: 0 home · 1 posts · 2 tags · 3 about · 4 cve · 5 security news · 6 rss. Auto-detected if omitted. */
   active?: number;
   /** Prompt path shown on the right of the local nav, e.g. "posts/zdi-25-1055". */
   path?: string;
@@ -37,7 +37,9 @@ function autoActive() {
   if (pathname.startsWith('/posts') || pathname.startsWith('/post') || pathname.startsWith('/blog')) return 1;
   if (pathname.startsWith('/tags')) return 2;
   if (pathname.startsWith('/about')) return 3;
-  if (pathname.startsWith('/rss')) return 4;
+  if (pathname.startsWith('/cve')) return 4;
+  if (pathname.startsWith('/security-news')) return 5;
+  if (pathname.startsWith('/rss')) return 6;
   return -1;
 }
 const active = Astro.props.active ?? autoActive();
@@ -53,6 +55,8 @@ const local = [
   ['posts', '/posts'],
   ['tags', '/tags'],
   ['about', '/about'],
+  ['cve', '/cve'],
+  ['security news', '/security-news'],
   ['rss', '/rss.xml'],
 ];
 
@@ -212,8 +216,8 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.xmin.cloud';
     top: 0;
     z-index: 40;
   }
-  .v11-localnav { display: flex; gap: 18px; font-size: 12.5px; }
-  .v11-localnav a { color: var(--color-subtle); font-weight: 400; }
+  .v11-localnav { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; }
+  .v11-localnav a { color: var(--color-subtle); font-weight: 400; white-space: nowrap; }
   .v11-localnav a.is-active { color: var(--color-fg); font-weight: 600; }
   .v11-localnav a:hover { color: var(--color-green-br); text-decoration: none; }
   .v11-promptpath { color: var(--color-subtle); font-size: 12px; }

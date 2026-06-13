@@ -878,6 +878,8 @@ async function getSitemap(env: Env, origin: string | null): Promise<Response> {
   const staticUrls = [
     { loc: `${SITE}/`, priority: '1.0' },
     { loc: `${SITE}/about/`, priority: '0.6' },
+    { loc: `${SITE}/cve/`, priority: '0.6' },
+    { loc: `${SITE}/security-news/`, priority: '0.6' },
   ];
   const postUrls = posts.map(post => ({
     loc: postCanonicalUrl(post.slug),
