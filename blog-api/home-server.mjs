@@ -186,8 +186,11 @@ class LocalUploads {
 }
 
 async function initDb(db) {
+  const schemaWithoutReviewIndexes = (path) => readFileSync(path, 'utf8')
+    .replace(/^CREATE (?:UNIQUE )?INDEX IF NOT EXISTS idx_posts_(?:review|source_id)\b.*;\n?/gm, '');
+
   if (dbDriver === 'postgres') {
-    await db.exec(readFileSync(new URL('./schema.postgres.sql', import.meta.url), 'utf8'));
+    await db.exec(schemaWithoutReviewIndexes(new URL('./schema.postgres.sql', import.meta.url)));
     await db.exec(`
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'manual';
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS source_url TEXT NOT NULL DEFAULT '';
@@ -201,7 +204,7 @@ async function initDb(db) {
     return;
   }
 
-  db.exec(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'));
+  db.exec(schemaWithoutReviewIndexes(new URL('./schema.sql', import.meta.url)));
 
   const userColumns = db.prepare('PRAGMA table_info(users)').all().results.map(row => row.name);
   if (!userColumns.includes('avatar_url')) {
