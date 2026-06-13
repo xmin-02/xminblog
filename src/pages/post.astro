@@ -33,7 +33,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <!-- Profile card -->
         <div class="sidebar-widget">
           <div class="flex flex-col items-center text-center py-2">
-            <div class="w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-bold mb-2.5" style="background: linear-gradient(135deg, #1f8c42, #11512a);">
+            <div id="sidebar-profile-avatar" class="w-14 h-14 rounded-full relative overflow-hidden flex items-center justify-center text-white text-lg font-bold mb-2.5" style="background: linear-gradient(135deg, #1f8c42, #11512a);">
               x
             </div>
             <p class="font-bold text-[var(--color-text)] text-sm">주수민 <span class="font-normal text-[var(--color-text-secondary)]">/ xmin</span></p>
@@ -421,6 +421,47 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
   }
 
+  function profileImageSrc(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    if (value.startsWith('/uploads/')) return `${API_BASE}${value}`;
+    return value;
+  }
+
+  function profileAvatarHtml(avatarUrl, nickname, sizeClass = 'w-6 h-6') {
+    const fallback = esc((nickname || '?')[0].toUpperCase());
+    const src = profileImageSrc(avatarUrl);
+    if (!src) {
+      return `<span class="${sizeClass} rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="width:1.5rem;height:1.5rem;max-width:1.5rem;max-height:1.5rem;background:linear-gradient(135deg,#1f8c42,#11512a);">${fallback}</span>`;
+    }
+    return `<span class="${sizeClass} rounded-full relative overflow-hidden flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="width:1.5rem;height:1.5rem;max-width:1.5rem;max-height:1.5rem;background:linear-gradient(135deg,#1f8c42,#11512a);">
+      ${fallback}
+      <img src="${safeUrl(src, 'image')}" alt="" style="position:absolute;inset:0;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:cover;display:block;" loading="lazy" decoding="async" onerror="this.style.display='none';">
+    </span>`;
+  }
+
+  function applyStoredProfileAvatars() {
+    const raw = localStorage.getItem('auth_user');
+    if (!raw) return;
+    let user;
+    try { user = JSON.parse(raw); } catch { return; }
+    if (!user || user.role !== 'admin' || !user.avatar_url) return;
+
+    const sidebarAvatar = document.getElementById('sidebar-profile-avatar');
+    if (sidebarAvatar) {
+      sidebarAvatar.textContent = 'x';
+      const img = document.createElement('img');
+      img.src = profileImageSrc(user.avatar_url);
+      img.alt = '';
+      img.className = 'absolute inset-0 w-full h-full object-cover';
+      img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:cover;display:block;';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.addEventListener('error', () => { img.remove(); }, { once: true });
+      sidebarAvatar.appendChild(img);
+    }
+  }
+
   function getViewerId() {
     let v = localStorage.getItem('viewer_id');
     if (!v) {
@@ -668,6 +709,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     localStorage.removeItem('auth_user');
   }
 
+  async function refreshStoredUser() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401 || res.status === 403) {
+        clearStoredAuth();
+        return null;
+      }
+      if (!res.ok) return null;
+      const user = await res.json();
+      localStorage.setItem('auth_user', JSON.stringify(user));
+      applyStoredProfileAvatars();
+      return user;
+    } catch {
+      return null;
+    }
+  }
+
   function showAdminAuthRequired(message = '관리자 로그인이 필요합니다.') {
     const container = document.getElementById('post-container');
     if (!container) return;
@@ -793,10 +855,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         commentList.innerHTML = comments.map(c => {
           const date = new Date(c.created_at * 1000).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
           const canDelete = currentRole === 'admin' || currentUserId === c.user_id;
+          const avatar = profileAvatarHtml(c.avatar_url, c.nickname);
           return `<div class="comment-card" id="comment-${c.id}">
             <div class="flex items-start justify-between gap-2">
               <div class="flex items-center gap-2 mb-1.5">
-                <span class="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:linear-gradient(135deg,#1f8c42,#11512a);">${esc((c.nickname||'?')[0].toUpperCase())}</span>
+                ${avatar}
                 <span class="text-xs font-semibold text-[var(--color-text)]">${esc(c.nickname || '익명')}</span>
                 <span class="text-xs text-[var(--color-text-secondary)]">${esc(date)}</span>
               </div>
@@ -815,7 +878,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const token = localStorage.getItem('auth_token');
     const userRaw = localStorage.getItem('auth_user');
     let nickname = '';
-    if (userRaw) { try { nickname = JSON.parse(userRaw).nickname || ''; } catch {} }
+    let avatarUrl = '';
+    if (userRaw) {
+      try {
+        const user = JSON.parse(userRaw);
+        nickname = user.nickname || '';
+        avatarUrl = user.avatar_url || '';
+      } catch {}
+    }
 
     if (!token) {
       area.innerHTML = `<div class="rounded-xl border border-[var(--color-border)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
@@ -826,7 +896,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     area.innerHTML = `<div class="space-y-2">
       <div class="flex items-center gap-2 mb-2">
-        <span class="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background:linear-gradient(135deg,#1f8c42,#11512a);">${esc((nickname||'?')[0].toUpperCase())}</span>
+        ${profileAvatarHtml(avatarUrl, nickname)}
         <span class="text-xs font-semibold text-[var(--color-text)]">${esc(nickname)}</span>
       </div>
       <textarea id="comment-input" class="comment-textarea" placeholder="댓글을 입력하세요..." maxlength="1000"></textarea>
@@ -950,6 +1020,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   async function loadPost() {
+    applyStoredProfileAvatars();
+    await refreshStoredUser();
     const slug = readRouteSlug();
     if (!slug) { window.location.href = '/'; return; }
 
@@ -1685,6 +1757,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   window.addEventListener('hashchange', loadPost);
+  applyStoredProfileAvatars();
   loadPost();
 </script>
 

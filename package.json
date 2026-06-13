@@ -11,6 +11,9 @@
     "preview": "astro preview",
     "astro": "astro"
   },
+  "overrides": {
+    "esbuild": "0.28.1"
+  },
   "dependencies": {
     "@astrojs/mdx": "^5.0.0",
     "@tailwindcss/vite": "^4.0.0",

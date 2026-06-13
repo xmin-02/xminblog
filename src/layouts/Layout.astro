@@ -21,7 +21,7 @@ interface Props {
 
 const {
   title = 'xmin.blog',
-  description = 'xmin의 개인 블로그 — 보안, AI, 개발',
+  description = '주수민의 보안 리서치 노트 — 퍼징, 바이너리 분석, AI',
   canonical = new URL(Astro.url.pathname, 'https://xmin.blog').toString(),
   noindex = false,
   ogType = 'website',
@@ -129,6 +129,17 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.xmin.cloud';
         var el = document.getElementById('v11-auth');
         if (!el) return;
         function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function avatarSrc(raw) {
+          var value = String(raw || '').trim();
+          if (!value) return '';
+          if (value.indexOf('/uploads/') === 0) return apiBase + value;
+          return value;
+        }
+        function avatarHtml(user, nick) {
+          var src = avatarSrc(user && user.avatar_url);
+          if (!src) return '';
+          return '<span class="v11-auth-avatar" style="display:inline-flex;width:16px;height:16px;max-width:16px;max-height:16px;margin-right:6px;border-radius:999px;overflow:hidden;vertical-align:-3px;border:1px solid var(--color-border);background:var(--color-panel2);line-height:0;flex:0 0 16px;"><img src="' + esc(src) + '" alt="" style="display:block;width:16px;height:16px;max-width:16px;max-height:16px;object-fit:cover;" onerror="this.parentElement.remove()"></span>';
+        }
         window.v11Logout = function (e) {
           if (e) e.preventDefault();
           localStorage.removeItem('auth_token');
@@ -142,8 +153,9 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.xmin.cloud';
         if (token && user) {
           var nick = esc(user.nickname || (user.email ? user.email.split('@')[0] : 'user'));
           var admin = user.role === 'admin';
-          el.innerHTML = nick + '@xmin <span class="v11-gr">~</span> $'
+          el.innerHTML = avatarHtml(user, nick) + nick + '@xmin <span class="v11-gr">~</span> $'
             + (admin ? ' <a href="/post#new" class="v11-auth-link">+new</a> <a href="/admin" class="v11-auth-link">admin</a>' : '')
+            + ' <a href="/mypage" class="v11-auth-link">mypage</a>'
             + ' <a href="#" onclick="v11Logout(event)" class="v11-auth-link v11-auth-dim">logout</a>';
         } else {
           el.innerHTML = 'guest@xmin <span class="v11-gr">~</span> $ <a href="/login" class="v11-auth-link">login</a>';
@@ -195,6 +207,22 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.xmin.cloud';
   .v11-globalnav a.is-active { color: var(--color-fg); font-weight: 600; }
   .v11-globalnav a:hover { color: var(--color-green-br); text-decoration: none; }
   .v11-guest { color: var(--color-dim); font-size: 11.5px; }
+  .v11-guest :global(.v11-auth-avatar) {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    border-radius: 999px;
+    overflow: hidden;
+    vertical-align: -3px;
+    border: 1px solid var(--color-border);
+    background: var(--color-panel2);
+  }
+  .v11-guest :global(.v11-auth-avatar img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
   .v11-guest :global(.v11-auth-link) { color: var(--color-green); margin-left: 4px; }
   .v11-guest :global(.v11-auth-link:hover) { color: var(--color-green-br); }
   .v11-guest :global(.v11-auth-dim) { color: var(--color-dim); }

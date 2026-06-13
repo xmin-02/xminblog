@@ -176,16 +176,10 @@ class LocalUploads {
   }
 
   async put(file) {
-    const extFromName = (file.name.split('.').pop() || '').replace(/[^\w-]/g, '').toLowerCase();
     const extFromType = file.type.split('/')[1]?.replace('jpeg', 'jpg').replace(/[^\w-]/g, '').toLowerCase();
+    const extFromName = (file.name.split('.').pop() || '').replace(/[^\w-]/g, '').toLowerCase();
     const ext = (extFromName || extFromType || 'bin').slice(0, 8);
-    const stem = file.name
-      .replace(/\.[^.]+$/, '')
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}-]+/gu, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 40) || 'image';
-    const name = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${stem}.${ext}`;
+    const name = `${crypto.randomUUID().replace(/-/g, '')}.${ext}`;
     await writeFile(join(this.dir, name), Buffer.from(await file.arrayBuffer()), { flag: 'wx' });
     return `${this.base}/${encodeURIComponent(name)}`;
   }

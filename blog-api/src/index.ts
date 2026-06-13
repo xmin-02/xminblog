@@ -12,6 +12,8 @@
  *   POST   /api/auth/signup     — register (email + password + optional nickname)
  *   POST   /api/auth/login      — login, returns JWT
  *   GET    /api/auth/me         — get current user (Bearer token)
+ *   POST   /api/auth/avatar     — upload profile image (auth required)
+ *   GET    /api/auth/my-likes   — list posts liked by current user
  *
  * Comment routes:
  *   GET    /api/comments/:slug      — list comments for post
@@ -505,8 +507,8 @@ async function handleSignup(request: Request, env: Env, origin: string | null): 
   const hash = await hashPassword(password);
   const displayName = nickname?.trim() || email.split('@')[0];
   const result = await env.DB.prepare(
-    'INSERT INTO users (email, password_hash, nickname, role) VALUES (?, ?, ?, ?) RETURNING id, email, nickname, role',
-  ).bind(email, hash, displayName, 'user').first<{ id: number; email: string; nickname: string; role: string }>();
+    'INSERT INTO users (email, password_hash, nickname, role) VALUES (?, ?, ?, ?) RETURNING id, email, nickname, role, avatar_url',
+  ).bind(email, hash, displayName, 'user').first<{ id: number; email: string; nickname: string; role: string; avatar_url?: string }>();
 
   if (!result) return json({ error: 'Failed to create user' }, 500, origin);
 
@@ -514,7 +516,7 @@ async function handleSignup(request: Request, env: Env, origin: string | null): 
     { sub: result.id, email: result.email, role: result.role, exp: Math.floor(Date.now() / 1000) + JWT_EXPIRY_SECS },
     env.JWT_SECRET,
   );
-  return json({ token, user: { id: result.id, email: result.email, nickname: displayName, role: result.role } }, 201, origin);
+  return json({ token, user: { id: result.id, email: result.email, nickname: displayName, role: result.role, avatar_url: result.avatar_url || '' } }, 201, origin);
 }
 
 async function handleLogin(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -529,16 +531,20 @@ async function handleLogin(request: Request, env: Env, origin: string | null): P
     const ok = await verifyAdminPassword(password, env);
     if (!ok) return json({ error: 'Invalid credentials' }, 401, origin);
     const adminEmail = adminPrimaryEmail(env);
+    const adminId = await ensureAdminUserId(env);
+    const adminRow = await env.DB.prepare(
+      'SELECT nickname, avatar_url FROM users WHERE id = ?',
+    ).bind(adminId).first<{ nickname?: string; avatar_url?: string }>();
     const token = await signJWT(
       { sub: 0, email: adminEmail, role: 'admin', exp: Math.floor(Date.now() / 1000) + JWT_EXPIRY_SECS },
       env.JWT_SECRET,
     );
-    return json({ token, user: { id: 0, email: adminEmail, nickname: 'xmin', role: 'admin' } }, 200, origin);
+    return json({ token, user: { id: 0, email: adminEmail, nickname: adminRow?.nickname || 'xmin', role: 'admin', avatar_url: adminRow?.avatar_url || '' } }, 200, origin);
   }
 
   const user = await env.DB.prepare(
-    'SELECT id, email, password_hash, nickname, role FROM users WHERE email = ?',
-  ).bind(email).first<{ id: number; email: string; password_hash: string; nickname: string; role: string }>();
+    'SELECT id, email, password_hash, nickname, role, avatar_url FROM users WHERE email = ?',
+  ).bind(email).first<{ id: number; email: string; password_hash: string; nickname: string; role: string; avatar_url?: string }>();
 
   if (!user) return json({ error: 'Invalid credentials' }, 401, origin);
   const ok = await checkPassword(password, user.password_hash);
@@ -548,44 +554,51 @@ async function handleLogin(request: Request, env: Env, origin: string | null): P
     { sub: user.id, email: user.email, role: user.role, exp: Math.floor(Date.now() / 1000) + JWT_EXPIRY_SECS },
     env.JWT_SECRET,
   );
-  return json({ token, user: { id: user.id, email: user.email, nickname: user.nickname, role: user.role } }, 200, origin);
+  return json({ token, user: { id: user.id, email: user.email, nickname: user.nickname, role: user.role, avatar_url: user.avatar_url || '' } }, 200, origin);
 }
 
 async function handleMe(request: Request, env: Env, origin: string | null): Promise<Response> {
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: 'Unauthorized' }, 401, origin);
 
-  if (user.sub === 0) {
-    return json({ id: 0, email: adminPrimaryEmail(env), nickname: 'xmin', role: 'admin' }, 200, origin);
-  }
-
+  const userId = await getDbUserIdForAuth(user, env);
   const row = await env.DB.prepare(
     'SELECT id, email, nickname, role, avatar_url FROM users WHERE id = ?',
-  ).bind(user.sub).first<{ id: number; email: string; nickname: string; role: string; avatar_url?: string }>();
+  ).bind(userId).first<{ id: number; email: string; nickname: string; role: string; avatar_url?: string }>();
 
   if (!row) return json({ error: 'User not found' }, 404, origin);
-  return json(row, 200, origin);
+  return json(user.sub === 0 ? { ...row, id: 0, email: adminPrimaryEmail(env), role: 'admin' } : row, 200, origin);
 }
 
 async function updateProfile(request: Request, env: Env, origin: string | null): Promise<Response> {
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: 'Unauthorized' }, 401, origin);
-  if (user.sub === 0) return json({ nickname: 'xmin', avatar_url: '' }, 200, origin);
 
   let body: { nickname?: string; avatar_url?: string };
   try { body = await request.json() as typeof body; } catch { return json({ error: 'Invalid JSON' }, 400, origin); }
 
   const nickname = body.nickname?.trim() || user.email.split('@')[0];
-  const avatarUrl = body.avatar_url?.trim() || '';
   if (nickname.length > 40) return json({ error: 'Nickname too long' }, 400, origin);
-  if (avatarUrl && !/^https?:\/\/[^\s]+$/i.test(avatarUrl)) return json({ error: 'Invalid avatar URL' }, 400, origin);
-
-  const row = await env.DB.prepare(
-    'UPDATE users SET nickname = ?, avatar_url = ? WHERE id = ? RETURNING id, email, nickname, role, avatar_url',
-  ).bind(nickname, avatarUrl, user.sub).first<{ id: number; email: string; nickname: string; role: string; avatar_url?: string }>();
+  const hasAvatarUrl = Object.prototype.hasOwnProperty.call(body, 'avatar_url');
+  const userId = await getDbUserIdForAuth(user, env);
+  let row: { id: number; email: string; nickname: string; role: string; avatar_url?: string } | null;
+  if (hasAvatarUrl) {
+    const avatarUrl = body.avatar_url?.trim() || '';
+    if (avatarUrl.length > 500) return json({ error: 'Avatar URL too long' }, 400, origin);
+    if (avatarUrl && !/^(https:\/\/[^\s]+|\/uploads\/[^\s]+)$/i.test(avatarUrl)) {
+      return json({ error: 'Avatar URL must be HTTPS or a local upload URL' }, 400, origin);
+    }
+    row = await env.DB.prepare(
+      'UPDATE users SET nickname = ?, avatar_url = ? WHERE id = ? RETURNING id, email, nickname, role, avatar_url',
+    ).bind(nickname, avatarUrl, userId).first<{ id: number; email: string; nickname: string; role: string; avatar_url?: string }>();
+  } else {
+    row = await env.DB.prepare(
+      'UPDATE users SET nickname = ? WHERE id = ? RETURNING id, email, nickname, role, avatar_url',
+    ).bind(nickname, userId).first<{ id: number; email: string; nickname: string; role: string; avatar_url?: string }>();
+  }
 
   if (!row) return json({ error: 'User not found' }, 404, origin);
-  return json(row, 200, origin);
+  return json(user.sub === 0 ? { ...row, id: 0, email: adminPrimaryEmail(env), role: 'admin' } : row, 200, origin);
 }
 
 async function changePassword(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -629,17 +642,34 @@ async function getMyComments(request: Request, env: Env, origin: string | null):
   return json(rows.results ?? [], 200, origin);
 }
 
+async function getMyLikes(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const user = await getAuthUser(request, env);
+  if (!user) return json({ error: 'Unauthorized' }, 401, origin);
+
+  const userId = await getDbUserIdForAuth(user, env);
+
+  const rows = await env.DB.prepare(`
+    SELECT post_slug, created_at
+    FROM likes
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 100
+  `).bind(userId).all<{ post_slug: string; created_at: number }>();
+
+  return json(rows.results ?? [], 200, origin);
+}
+
 // ─── Comments handlers ────────────────────────────────────────────────────────
 
 async function getComments(slug: string, env: Env, origin: string | null): Promise<Response> {
   const invalid = await validatePostSlug(slug, env, origin);
   if (invalid) return invalid;
   const rows = await env.DB.prepare(`
-    SELECT c.id, c.content, c.created_at, u.nickname, u.id as user_id
+    SELECT c.id, c.content, c.created_at, u.nickname, u.avatar_url, u.id as user_id
     FROM comments c JOIN users u ON c.user_id = u.id
     WHERE c.post_slug = ?
     ORDER BY c.created_at ASC
-  `).bind(slug).all<{ id: number; content: string; created_at: number; nickname: string; user_id: number }>();
+  `).bind(slug).all<{ id: number; content: string; created_at: number; nickname: string; avatar_url?: string; user_id: number }>();
 
   return json(rows.results ?? [], 200, origin);
 }
@@ -658,16 +688,13 @@ async function addComment(slug: string, request: Request, env: Env, origin: stri
   if (content.length > 1000) return json({ error: 'Comment too long (max 1000 chars)' }, 400, origin);
   if (blockedCommentTerm(content, env)) return json({ error: 'Blocked comment content' }, 400, origin);
 
-  // Resolve user_id: admin (sub=0) is stored lazily in the DB on first use
-  let userId = user.sub;
-  let nickname = 'xmin';
-  if (user.sub !== 0) {
-    const row = await env.DB.prepare('SELECT nickname FROM users WHERE id = ?').bind(user.sub).first<{ nickname: string }>();
-    if (!row) return json({ error: 'User not found' }, 404, origin);
-    nickname = row.nickname;
-  } else {
-    userId = await ensureAdminUserId(env);
-  }
+  const userId = await getDbUserIdForAuth(user, env);
+  const userRow = await env.DB.prepare(
+    'SELECT nickname, avatar_url FROM users WHERE id = ?',
+  ).bind(userId).first<{ nickname: string; avatar_url?: string }>();
+  if (!userRow) return json({ error: 'User not found' }, 404, origin);
+  const nickname = userRow.nickname || user.email.split('@')[0];
+  const avatarUrl = userRow.avatar_url || '';
 
   const now = Math.floor(Date.now() / 1000);
   const duplicate = await env.DB.prepare(
@@ -680,7 +707,7 @@ async function addComment(slug: string, request: Request, env: Env, origin: stri
   ).bind(slug, userId, content).first<{ id: number; created_at: number }>();
 
   if (!result) return json({ error: 'Failed to save comment' }, 500, origin);
-  return json({ id: result.id, content, created_at: result.created_at, nickname, user_id: userId }, 201, origin);
+  return json({ id: result.id, content, created_at: result.created_at, nickname, avatar_url: avatarUrl, user_id: userId }, 201, origin);
 }
 
 async function deleteComment(id: number, request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -838,7 +865,7 @@ async function getRssFeed(env: Env, origin: string | null): Promise<Response> {
   <channel>
     <title>xmin.blog</title>
     <link>${SITE}/</link>
-    <description>xmin의 개인 블로그 — 보안, AI, 개발</description>
+    <description>주수민의 보안 리서치 노트 — 퍼징, 바이너리 분석, AI</description>
     <language>ko</language>
 ${items}
   </channel>
@@ -1181,6 +1208,81 @@ async function getAdminStats(request: Request, env: Env, origin: string | null):
   }, 200, origin);
 }
 
+type ValidatedImage = {
+  bytes: Uint8Array;
+  ext: 'jpg' | 'png' | 'webp' | 'gif';
+  mime: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+};
+
+function sniffImage(bytes: Uint8Array): Pick<ValidatedImage, 'ext' | 'mime'> | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { ext: 'jpg', mime: 'image/jpeg' };
+  }
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+    bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a
+  ) {
+    return { ext: 'png', mime: 'image/png' };
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) {
+    return { ext: 'webp', mime: 'image/webp' };
+  }
+  if (
+    bytes.length >= 6 &&
+    bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 &&
+    bytes[3] === 0x38 && (bytes[4] === 0x37 || bytes[4] === 0x39) && bytes[5] === 0x61
+  ) {
+    return { ext: 'gif', mime: 'image/gif' };
+  }
+  return null;
+}
+
+function mimeMatches(declared: string, detected: string): boolean {
+  const normalized = declared.toLowerCase();
+  return normalized === detected || (normalized === 'image/jpg' && detected === 'image/jpeg');
+}
+
+async function validatedImageFromForm(
+  request: Request,
+  origin: string | null,
+  options: { allowGif: boolean; maxBytes: number },
+): Promise<ValidatedImage | Response> {
+  const form = await request.formData();
+  const fileEntry = form.get('file');
+  if (typeof fileEntry === 'string' || !fileEntry || !('arrayBuffer' in fileEntry)) {
+    return json({ error: 'file required' }, 400, origin);
+  }
+  const file = fileEntry as File;
+  if (file.size > options.maxBytes) {
+    return json({ error: `File too large (max ${Math.floor(options.maxBytes / 1024 / 1024)}MB)` }, 400, origin);
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const detected = sniffImage(bytes);
+  if (!detected) return json({ error: 'Unsupported image format' }, 400, origin);
+  if (!options.allowGif && detected.mime === 'image/gif') {
+    return json({ error: 'GIF avatars are not allowed' }, 400, origin);
+  }
+  if (file.type && !mimeMatches(file.type, detected.mime)) {
+    return json({ error: 'Image MIME type does not match file content' }, 400, origin);
+  }
+  return { bytes, ...detected };
+}
+
+function randomUploadName(ext: ValidatedImage['ext']): string {
+  return `${crypto.randomUUID().replace(/-/g, '')}.${ext}`;
+}
+
+function uploadFileFromImage(image: ValidatedImage): File {
+  return new File([image.bytes], randomUploadName(image.ext), {
+    type: image.mime,
+  });
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.length; i += 0x8000) {
@@ -1192,32 +1294,55 @@ function bytesToBase64(bytes: Uint8Array): string {
 async function uploadImage(request: Request, env: Env, origin: string | null): Promise<Response> {
   const admin = await requireAdminRequest(request, env, origin);
   if (admin instanceof Response) return admin;
-  const form = await request.formData();
-  const fileEntry = form.get('file');
-  if (typeof fileEntry === 'string' || !fileEntry || !('arrayBuffer' in fileEntry)) {
-    return json({ error: 'file required' }, 400, origin);
-  }
-  const file = fileEntry as File;
-  if (!file.type.startsWith('image/')) return json({ error: 'Only image uploads are allowed' }, 400, origin);
-  if (file.size > 5 * 1024 * 1024) return json({ error: 'File too large (max 5MB)' }, 400, origin);
+  const image = await validatedImageFromForm(request, origin, { allowGif: true, maxBytes: 5 * 1024 * 1024 });
+  if (image instanceof Response) return image;
 
   if (env.UPLOADS) {
-    const url = await env.UPLOADS.put(file, request);
+    const url = await env.UPLOADS.put(uploadFileFromImage(image), request);
     return json({ url }, 201, origin);
   }
 
-  const ext = (file.name.split('.').pop() || 'bin').replace(/[^\w-]/g, '').toLowerCase().slice(0, 8) || 'bin';
-  const safeName = file.name.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-|-$/g, '').slice(0, 40) || 'image';
-  const path = `public/uploads/${Date.now()}-${safeName}.${ext}`;
+  const path = `public/uploads/${randomUploadName(image.ext)}`;
   const { owner, repo, branch, token } = githubConfig(env);
-  const content = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+  const content = bytesToBase64(image.bytes);
   const res = await ghPut(`repos/${owner}/${repo}/contents/${path}`, {
-    message: `chore: upload image "${file.name}"`,
+    message: 'chore: upload image',
     content,
     branch,
   }, token);
   if (!res.ok) return json({ error: `GitHub error: ${await res.text()}` }, 500, origin);
   return json({ url: `/${path.replace(/^public\//, '')}` }, 201, origin);
+}
+
+async function uploadAvatar(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const user = await getAuthUser(request, env);
+  if (!user) return json({ error: 'Unauthorized' }, 401, origin);
+
+  const image = await validatedImageFromForm(request, origin, { allowGif: false, maxBytes: 2 * 1024 * 1024 });
+  if (image instanceof Response) return image;
+
+  const userId = await getDbUserIdForAuth(user, env);
+  let avatarUrl: string;
+  if (env.UPLOADS) {
+    avatarUrl = await env.UPLOADS.put(uploadFileFromImage(image), request);
+  } else {
+    const path = `public/uploads/avatars/${randomUploadName(image.ext)}`;
+    const { owner, repo, branch, token } = githubConfig(env);
+    const res = await ghPut(`repos/${owner}/${repo}/contents/${path}`, {
+      message: 'chore: upload profile avatar',
+      content: bytesToBase64(image.bytes),
+      branch,
+    }, token);
+    if (!res.ok) return json({ error: `GitHub error: ${await res.text()}` }, 500, origin);
+    avatarUrl = `/${path.replace(/^public\//, '')}`;
+  }
+
+  const row = await env.DB.prepare(
+    'UPDATE users SET avatar_url = ? WHERE id = ? RETURNING id, email, nickname, role, avatar_url',
+  ).bind(avatarUrl, userId).first<{ id: number; email: string; nickname: string; role: string; avatar_url?: string }>();
+
+  if (!row) return json({ error: 'User not found' }, 404, origin);
+  return json(user.sub === 0 ? { ...row, id: 0, email: adminPrimaryEmail(env), role: 'admin' } : row, 201, origin);
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -1260,11 +1385,19 @@ export default {
     if (url.pathname === '/api/auth/profile' && method === 'PUT') {
       return updateProfile(request, env, origin);
     }
+    if (url.pathname === '/api/auth/avatar' && method === 'POST') {
+      const limited = rateLimit(request, 'avatar', 20, 60 * 10, origin);
+      if (limited) return limited;
+      return uploadAvatar(request, env, origin);
+    }
     if (url.pathname === '/api/auth/change-password' && method === 'POST') {
       return changePassword(request, env, origin);
     }
     if (url.pathname === '/api/auth/my-comments' && method === 'GET') {
       return getMyComments(request, env, origin);
+    }
+    if (url.pathname === '/api/auth/my-likes' && method === 'GET') {
+      return getMyLikes(request, env, origin);
     }
 
     // ── Admin / upload / analytics routes ───────────────────────────────────

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS likes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_likes_slug ON likes(post_slug);
+CREATE INDEX IF NOT EXISTS idx_likes_user ON likes(user_id, created_at);
 
 CREATE TABLE IF NOT EXISTS page_views (
   id BIGSERIAL PRIMARY KEY,

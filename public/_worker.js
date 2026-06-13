@@ -38,7 +38,7 @@ function setMeta(html, attr, value, tag) {
 
 function injectPostHead(html, post, requestUrl) {
   const title = `${post.title || post.slug || '글'} — xmin.blog`;
-  const description = post.description || 'xmin의 개인 블로그 — 보안, AI, 개발';
+  const description = post.description || '주수민의 보안 리서치 노트 — 퍼징, 바이너리 분석, AI';
   const canonical = `${requestUrl.origin}/post/?slug=${encodeURIComponent(post.slug || requestUrl.searchParams.get('slug') || '')}`;
   const image = absoluteUrl(post.cover, requestUrl.origin);
 

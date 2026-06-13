@@ -2,12 +2,13 @@
 import Layout from '../layouts/Layout.astro';
 
 const idRows: Array<[string, string, string?, string?]> = [
-  ['name', '주수민 (Ju Sumin)', 'fg'],
+  ['name', '주수민 (Sumin Joo)', 'fg'],
+  ['handle', 'xmin', 'gr'],
   ['role', 'AI Security Engineer'],
-  ['focus', 'fuzzing · binary · ai'],
+  ['focus', 'fuzzing · binary · AI'],
   ['edu', '백석대 정보보호학과 4th'],
   ['pgp', '0xD2C0F846C3569321', 'am', '/pgp.asc'],
-  ['creed', '공격자 관점으로 생각하기'],
+  ['creed', '공격자 관점에서 검증하기'],
 ];
 
 // Real box-drawing card rendered in D2Coding (Hangul = exactly 2 mono cells),
@@ -47,19 +48,19 @@ const timeline = [
 ];
 ---
 
-<Layout title="소개 — xmin.blog" description="주수민 - AI Security Engineer · ZDI-25-1055" active={3} path="about" maxWidth={960}>
+<Layout title="소개 — xmin.blog" description="주수민의 보안 리서치 노트 — 퍼징, 바이너리 분석, AI" active={3} path="about" maxWidth={960}>
   <div class="v11-about-grid" style="padding-top:34px;padding-bottom:34px;">
     <div>
       <div class="v11-dim" style="font-size:12px;margin-bottom:6px;"><span class="v11-gr">$</span> whoami --verbose</div>
       <pre class="v11-idcard" set:html={idCardHtml}></pre>
 
       <p class="v11-sans" style="font-size:15.5px;color:var(--color-text);line-height:1.85;margin:0;">
-        공격자 관점의 보안 리서치를 지향합니다. <strong style="color:var(--color-fg);">퍼징·바이너리 분석</strong>에 집중하며,
-        AI 와 함께 더 안전한 시스템을 만드는 일을 하고 싶습니다. 처음 접한 주제도 도전적으로 파고듭니다.<span class="v11-cursor"></span>
+        공격자 관점에서 시스템을 살피고, <strong style="color:var(--color-fg);">퍼징·바이너리 분석</strong>으로 취약점을 추적합니다.
+        AI를 리서치 도구로 실험하며, 처음 접한 주제도 끝까지 파고듭니다.<span class="v11-cursor"></span>
       </p>
       <p class="v11-sans" style="font-size:14.5px;color:var(--color-subtle);line-height:1.85;">
-        포트폴리오는 <a href="https://xmin.sh" target="_blank" rel="noopener">xmin.sh</a>, 랜딩은
-        <a href="https://xmin.io" target="_blank" rel="noopener">xmin.io</a>. 이 블로그는 RSS 권장.
+        포트폴리오는 <a href="https://xmin.sh" target="_blank" rel="noopener">xmin.sh</a>, 랜딩 페이지는
+        <a href="https://xmin.io" target="_blank" rel="noopener">xmin.io</a>에 정리했습니다. 새 글은 <a href="/rss.xml">RSS</a>로 받아볼 수 있습니다.
       </p>
 
       <h3 class="v11-about-h3">// $ cat skills</h3>
@@ -121,7 +122,7 @@ const timeline = [
       </div>
       <div class="v11-side-box" style="font-size:11px;color:var(--color-subtle);line-height:1.7;">
         <div class="v11-dim" style="font-size:10.5px;letter-spacing:0.06em;margin-bottom:6px;">// colophon</div>
-        Astro · Cloudflare · <span class="v11-gr">no ads</span> · <span class="v11-gr">no trackers</span> · <span class="v11-gr">no AI text</span>.
+        Astro · Cloudflare · <span class="v11-gr">no ads</span> · <span class="v11-gr">no trackers</span> · <span class="v11-gr">human-written</span>.
       </div>
     </aside>
   </div>

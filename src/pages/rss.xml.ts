@@ -22,7 +22,7 @@ async function fallbackRss() {
     return `    <item>\n      <title>${escapeXml(post.data.title)}</title>\n      <link>${escapeXml(url)}</link>\n      <guid isPermaLink="true">${escapeXml(url)}</guid>\n      <description>${escapeXml(post.data.description)}</description>\n      <pubDate>${post.data.date.toUTCString()}</pubDate>\n    </item>`;
   }).join('\n');
 
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0">\n  <channel>\n    <title>xmin.blog</title>\n    <link>${SITE}/</link>\n    <description>xmin의 개인 블로그 — 보안, AI, 개발</description>\n    <language>ko</language>\n${items}\n  </channel>\n</rss>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0">\n  <channel>\n    <title>xmin.blog</title>\n    <link>${SITE}/</link>\n    <description>주수민의 보안 리서치 노트 — 퍼징, 바이너리 분석, AI</description>\n    <language>ko</language>\n${items}\n  </channel>\n</rss>\n`;
 }
 
 export async function GET() {
