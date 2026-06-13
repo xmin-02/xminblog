@@ -1,0 +1,33 @@
+---
+interface Props {
+  postCount?: number;
+}
+const { postCount = 47 } = Astro.props;
+---
+<pre class="v11-neofetch">
+<span class="v11-gr">guest@xmin</span>
+<span class="v11-dim">─────────────</span>
+<span class="v11-sub">OS     ›</span>{` xmin.linux 02.10`}
+<span class="v11-sub">Host   ›</span>{` xmin.blog`}
+<span class="v11-sub">Kernel ›</span>{` 6.5.0-xmin-sec`}
+<span class="v11-sub">Uptime ›</span>{` 8,607 days`}
+<span class="v11-sub">Shell  ›</span>{` xsh 5.9 / bash`}
+<span class="v11-sub">WM     ›</span>{` xmin-shell`}
+<span class="v11-sub">CPU    ›</span>{` `}<span class="v11-fg">AI Security 25c</span>
+<span class="v11-sub">Posts  ›</span>{` `}<span class="v11-fg" data-posts-count>{postCount}</span>{` · 3 영역`}
+<span class="v11-sub">0-Day  ›</span>{` `}<span class="v11-rd">ZDI-25-1055</span>
+<span class="v11-sub">Locale ›</span>{` ko_KR.UTF-8`}
+</pre>
+
+<style>
+  .v11-neofetch {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.85;
+    align-self: start;
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    white-space: pre;
+    overflow-x: auto;
+  }
+</style>

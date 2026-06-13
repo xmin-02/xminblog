@@ -1,0 +1,18 @@
+---
+interface Props {
+  name: string;
+  /** area color: 'sec' | 'ai' | 'dev' | '' (default subtle) */
+  area?: string;
+  href?: string;
+  hash?: boolean;
+  size?: number;
+}
+const { name, area = '', href, hash = true, size = 11.5 } = Astro.props;
+const cls = `v11-tag ${area}`.trim();
+const label = `${hash ? '#' : ''}${name}`;
+---
+{href ? (
+  <a href={href} class={cls} style={`font-size:${size}px;text-decoration:none;`}>{label}</a>
+) : (
+  <span class={cls} style={`font-size:${size}px;`}>{label}</span>
+)}

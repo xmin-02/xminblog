@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import mdx from '@astrojs/mdx';
+import rehypeFigure from './src/lib/rehype-figure.mjs';
 
 export default defineConfig({
   site: 'https://xmin.blog',
@@ -14,5 +15,6 @@ export default defineConfig({
     shikiConfig: {
       theme: 'github-dark',
     },
+    rehypePlugins: [rehypeFigure],
   },
 });

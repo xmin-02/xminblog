@@ -12,7 +12,8 @@ const blog = defineCollection({
     draft: z.boolean().default(false),
     is_private: z.boolean().default(false),
     password_hash: z.string().optional(),
-    cover: z.string().optional(),
+    cover: z.string().optional(),       // 썸네일/히어로 이미지 경로
+    coverAlt: z.string().optional(),    // a11y: cover alt text (없으면 빌드 경고)
   }),
 });
 

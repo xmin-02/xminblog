@@ -1,7 +1,5 @@
 ---
-import Header from '../components/Header.astro';
-import Footer from '../components/Footer.astro';
-import '../styles/global.css';
+import Layout from './Layout.astro';
 
 interface Props {
   title: string;
@@ -9,107 +7,33 @@ interface Props {
   canonical?: string;
   noindex?: boolean;
   ogType?: string;
+  active?: number;
+  path?: string;
+  progress?: boolean;
 }
 
 const {
   title,
   description = 'xmin의 개인 블로그 — 보안, AI, 개발',
-  canonical = new URL(Astro.url.pathname, 'https://xmin.blog').toString(),
+  canonical,
   noindex = false,
   ogType = 'website',
+  active,
+  path = '',
+  progress = false,
 } = Astro.props;
-const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.xmin.cloud';
 ---
 
-<!DOCTYPE html>
-<html lang="ko">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content={description} />
-    <meta name="generator" content={Astro.generator} />
-    {noindex && <meta name="robots" content="noindex, nofollow" />}
-    <link rel="canonical" href={canonical} />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
-    <meta property="og:type" content={ogType} />
-    <meta property="og:url" content={canonical} />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-    <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
-    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css" rel="stylesheet" />
-    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <title>{title}</title>
-    <script define:vars={{ apiBase }}>
-      window.__XMIN_API_BASE__ = apiBase;
-    </script>
-    <script is:inline>
-      const theme = localStorage.getItem('theme') ?? 'dark';
-      if (theme === 'dark') document.documentElement.classList.add('dark');
-    </script>
-  </head>
-  <body class="min-h-screen flex flex-col">
-    <canvas id="bg-glow" aria-hidden="true" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
-    <Header />
-    <main class="flex-1" style="position:relative;z-index:1;">
-      <slot />
-    </main>
-    <Footer />
-    <script is:inline>
-      (function () {
-        var canvas = document.getElementById('bg-glow');
-        var ctx = canvas.getContext('2d');
-        var mouse = { x: -1000, y: -1000 };
-        var current = { x: -1000, y: -1000 };
-        var raf;
-
-        function resize() {
-          canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight;
-        }
-        resize();
-        window.addEventListener('resize', resize);
-
-        window.addEventListener('mousemove', function (e) {
-          mouse.x = e.clientX;
-          mouse.y = e.clientY;
-        });
-
-        function isDark() {
-          return document.documentElement.classList.contains('dark');
-        }
-
-        function draw() {
-          var ease = 0.15;
-          current.x += (mouse.x - current.x) * ease;
-          current.y += (mouse.y - current.y) * ease;
-
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          var opacity = isDark() ? 0.18 : 0.08;
-          var radius = Math.min(canvas.width, canvas.height) * 0.22;
-          var rgb = isDark() ? '34,211,238' : '8,145,178';
-
-          var grad = ctx.createRadialGradient(
-            current.x, current.y, 0,
-            current.x, current.y, radius
-          );
-          grad.addColorStop(0, 'rgba(' + rgb + ',' + opacity + ')');
-          grad.addColorStop(0.45, 'rgba(' + rgb + ',' + (opacity * 0.35) + ')');
-          grad.addColorStop(1, 'rgba(' + rgb + ',0)');
-
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          raf = requestAnimationFrame(draw);
-        }
-
-        draw();
-      })();
-    </script>
-  </body>
-</html>
+<Layout
+  title={title}
+  description={description}
+  canonical={canonical}
+  noindex={noindex}
+  ogType={ogType}
+  active={active}
+  path={path}
+  progress={progress}
+  bare={true}
+>
+  <slot />
+</Layout>

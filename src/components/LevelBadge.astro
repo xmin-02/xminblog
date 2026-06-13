@@ -1,0 +1,10 @@
+---
+interface Props {
+  /** ok | info | warn | cve | ai */
+  level?: string;
+  label?: string;
+}
+const { level = 'ok', label } = Astro.props;
+const text = label ?? { ok: 'OK', info: 'INFO', warn: 'WARN', cve: 'CVE', ai: 'AI' }[level] ?? level.toUpperCase();
+---
+<span class={`lvl lvl-${level}`}>{text}</span>

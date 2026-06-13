@@ -5,6 +5,8 @@ date: 2025-11-01T15:23:00+09:00
 category: "환경 구축"
 tags: ["fuzz", "kernel fuzzing", "Linux Kernel", "Syzkaller"]
 draft: false
+cover: "https://api.xmin.cloud/uploads/tistory-리눅스-커널-취약점-분석-리눅스-커널-퍼징을-위한-syzkaller-빌드-01-152f145c2cb4.png"
+coverAlt: "QEMU에서 부팅된 커스텀 리눅스 커널 화면"
 ---
 
 # [리눅스 커널 취약점 분석] 리눅스 커널 퍼징을 위한 Syzkaller 빌드

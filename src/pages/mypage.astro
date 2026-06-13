@@ -26,7 +26,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div class="flex items-start gap-4 mb-5">
           <span id="mp-avatar"
             class="w-16 h-16 rounded-full overflow-hidden flex items-center justify-center text-white text-xl font-bold flex-shrink-0"
-            style="background:linear-gradient(135deg,#0d9488,#0f766e);">?</span>
+            style="background:linear-gradient(135deg,#1f8c42,#11512a);">?</span>
           <div class="min-w-0 flex-1">
             <p class="text-base font-bold" id="mp-nickname" style="font-family:var(--font-display);">—</p>
             <p class="text-xs text-[var(--color-text-secondary)] truncate" id="mp-email" style="font-family:var(--font-mono);">—</p>
@@ -261,7 +261,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       localStorage.setItem('auth_user', JSON.stringify(_user));
       renderProfile();
       status.textContent = '저장됨';
-      status.style.color = '#10b981';
+      status.style.color = '#3fb950';
       setTimeout(() => { status.textContent = ''; }, 2500);
     } catch (err) {
       status.textContent = '오류: ' + err.message;
@@ -299,7 +299,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       status.textContent = '변경됨';
-      status.style.color = '#10b981';
+      status.style.color = '#3fb950';
       document.getElementById('mp-pw-old').value = '';
       document.getElementById('mp-pw-new').value = '';
       setTimeout(() => { status.textContent = ''; }, 2500);

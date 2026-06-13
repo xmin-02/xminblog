@@ -1,0 +1,98 @@
+---
+import { Image } from 'astro:assets';
+
+interface Props {
+  /** imported image (ImageMetadata) or a string path/URL (remote or relative) */
+  src?: ImageMetadata | string;
+  alt?: string;
+  /** "fig.1" etc. */
+  fig?: string;
+  /** caption; falls back to alt */
+  caption?: string;
+  /** markdown image title (`![alt](src "title")`) — used as fig if it looks like one */
+  title?: string;
+  /** filename shown in the bar; derived from src if omitted */
+  name?: string;
+  /** explicit format / dimensions (when known) */
+  format?: string;
+  width?: number;
+  height?: number;
+  /** no-src fallback: 'thumb' (dashed) | 'card' (ascii) */
+  fallback?: string;
+  eager?: boolean;
+}
+
+const {
+  src,
+  alt = '',
+  fig,
+  caption,
+  title,
+  name,
+  format,
+  width,
+  height,
+  fallback = 'thumb',
+  eager = false,
+} = Astro.props;
+
+const isMeta = src && typeof src === 'object' && 'src' in src;
+const url = isMeta ? (src as ImageMetadata).src : (src as string | undefined);
+
+function fileFrom(u?: string) {
+  if (!u) return 'image';
+  try { return decodeURIComponent(u.split('/').pop()!.split('?')[0]); } catch { return u.split('/').pop(); }
+}
+function extFrom(u?: string) {
+  if (!u) return 'img';
+  const e = (u.split('.').pop() || '').split('?')[0].toLowerCase();
+  return e && e.length <= 5 ? e : 'img';
+}
+
+const fileName = name ?? fileFrom(url);
+const fmt = format ?? (isMeta ? (src as ImageMetadata).format : extFrom(url));
+const w = width ?? (isMeta ? (src as ImageMetadata).width : undefined);
+const h = height ?? (isMeta ? (src as ImageMetadata).height : undefined);
+const res = w && h ? `${w}×${h}` : null;
+
+// fig from explicit prop or a "fig…"-looking markdown title
+const figLabel = fig ?? (title && /^fig/i.test(title) ? title : undefined);
+const cap = caption ?? (alt || undefined);
+const loading = eager ? 'eager' : 'lazy';
+---
+{url ? (
+  <figure class="figure">
+    <div class="imgframe">
+      <div class="bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="file">{fileName}</span>
+        <span class="meta">{fmt}{res ? ` · ${res}` : ''}<span data-res hidden></span></span>
+      </div>
+      {isMeta ? (
+        <Image class="img" src={src as ImageMetadata} alt={alt} loading={loading} decoding="async" />
+      ) : (
+        <img class="img" src={url} alt={alt} loading={loading} decoding="async" />
+      )}
+    </div>
+    {cap && (
+      <figcaption>
+        {figLabel && <span class="fig">{figLabel}</span>} {cap}
+      </figcaption>
+    )}
+  </figure>
+) : (
+  <figure class="figure">
+    {fallback === 'card' ? (
+      <div class="imgframe noimg" style="height:120px;">
+        <pre style="margin:0;font-size:9px;line-height:1.2;text-align:center;">{`┌─────────┐\n│  no     │\n│  cover  │\n└─────────┘`}</pre>
+      </div>
+    ) : (
+      <div class="noimg" style="height:120px;font-size:10px;">no image</div>
+    )}
+    {cap && (
+      <figcaption>
+        {figLabel && <span class="fig">{figLabel}</span>} {cap}
+      </figcaption>
+    )}
+  </figure>
+)}

@@ -1,0 +1,15 @@
+---
+interface Props {
+  /** the command text, e.g. "ls -lth posts/" */
+  cmd?: string;
+  /** trailing dim // comment */
+  comment?: string;
+  sign?: string;
+  size?: number;
+  cursor?: boolean;
+}
+const { cmd, comment, sign = '$', size = 12.5, cursor = false } = Astro.props;
+---
+<span class="v11-mono" style={`font-size:${size}px;color:var(--color-dim);`}>
+  <span class="v11-gr">{sign}</span>{cmd ? ' ' : ''}{cmd}<slot />{comment && <span class="v11-dim"> // {comment}</span>}{cursor && <span class="v11-cursor"></span>}
+</span>

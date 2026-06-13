@@ -1,5 +1,7 @@
 ---
-import BaseLayout from './BaseLayout.astro';
+import Layout from './Layout.astro';
+import Figure from '../components/Figure.astro';
+import { areaForPost } from '../lib/area';
 
 interface Props {
   frontmatter: {
@@ -8,55 +10,213 @@ interface Props {
     date: Date;
     category: string;
     tags: string[];
+    cover?: string;
+    coverAlt?: string;
   };
   canonical?: string;
+  slug?: string;
 }
 
-const { frontmatter, canonical } = Astro.props;
-const formattedDate = frontmatter.date.toISOString().split('T')[0];
+const { frontmatter, canonical, slug = '' } = Astro.props;
+const fm = frontmatter;
+const formattedDate = fm.date.toISOString().split('T')[0];
+
+const area = areaForPost(fm);
+
+if (fm.cover && !fm.coverAlt) {
+  console.warn(`[BlogPost] "${slug}" has cover but no coverAlt — add coverAlt for a11y.`);
+}
 ---
 
-<BaseLayout title={`${frontmatter.title} — xmin.blog`} description={frontmatter.description} canonical={canonical} ogType="article">
-  <article class="mx-auto max-w-3xl px-6 py-16">
-    <header class="mb-12">
-      <div class="flex items-center gap-3 mb-4">
-        <span class="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-          {frontmatter.category}
-        </span>
-        <time class="text-sm font-mono text-[var(--color-text-secondary)]">
-          {formattedDate}
-        </time>
+<Layout
+  title={`${fm.title} — xmin.blog`}
+  description={fm.description}
+  canonical={canonical}
+  ogType="article"
+  active={1}
+  path={`posts/${slug}`}
+  progress={true}
+  bare={true}
+>
+  <div class="v11-post-grid">
+    <!-- left: TOC -->
+    <aside class="v11-post-toc-col">
+      <div class="v11-dim" style="font-size:11px;letter-spacing:0.06em;margin-bottom:10px;">// $ tree</div>
+      <ol id="post-toc" class="v11-toc"></ol>
+      <div style="margin-top:18px;padding-top:12px;border-top:1px solid var(--color-border);">
+        <div class="v11-dim" style="font-size:11px;">reading <span id="read-pct">0%</span></div>
+        <div class="v11-gr" id="read-bar-ascii" style="font-size:11px;margin:4px 0;letter-spacing:1px;">[░░░░░░░░░░░░░░░░]</div>
       </div>
-      <h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-4" style="font-family: var(--font-display);">
-        {frontmatter.title}
+    </aside>
+
+    <!-- center: article -->
+    <article>
+      <div class="v11-dim" style="font-size:12px;">$ cat posts/{slug}.md | less</div>
+      <h1 class="v11-sans v11-post-h1">
+        <span class="v11-dim v11-mono" style="font-weight:400;">#</span> {fm.title}
       </h1>
-      <p class="text-lg text-[var(--color-text-secondary)]">
-        {frontmatter.description}
-      </p>
-      {frontmatter.tags.length > 0 && (
-        <div class="flex flex-wrap gap-2 mt-4">
-          {frontmatter.tags.map(tag => (
-            <span class="px-2 py-1 rounded-full text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
-              {tag}
-            </span>
-          ))}
+      <div class="v11-dim v11-post-meta">
+        <span>{formattedDate} KST</span>
+        <span>· {fm.description ? `${Math.max(3, Math.round(fm.description.length / 8))}m` : '—'}</span>
+        {fm.category && <span>· <span class={`lvl ${area === 'sec' ? 'lvl-cve' : area === 'ai' ? 'lvl-ai' : 'lvl-info'}`}>{fm.category}</span></span>}
+      </div>
+      {fm.tags && fm.tags.length > 0 && (
+        <div style="display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap;">
+          {fm.tags.map((t) => <span class={`v11-tag ${area}`} style="font-size:11.5px;">#{t}</span>)}
         </div>
       )}
-      <hr class="mt-8 border-[var(--color-border)]" />
-    </header>
-    <div class="prose prose-lg max-w-none">
-      <slot />
-    </div>
-    <footer class="mt-16 pt-8 border-t border-[var(--color-border)]">
-      <a
-        href="/"
-        class="inline-flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-primary transition-colors"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
-        목록으로 돌아가기
-      </a>
-    </footer>
-  </article>
-</BaseLayout>
+
+      {fm.cover && (
+        <Figure src={fm.cover} alt={fm.coverAlt || fm.title} fig="fig.0 · cover" caption={fm.coverAlt} eager={true} />
+      )}
+
+      <div class="prose" id="post-prose">
+        <slot />
+      </div>
+
+      <hr class="v11-hr" style="margin:28px 0 14px;" />
+      <div style="display:flex;justify-content:space-between;font-size:13px;flex-wrap:wrap;gap:10px;">
+        <a href="/posts"><span class="v11-dim">◄</span> 글 목록</a>
+        <a href={`/post/?slug=${encodeURIComponent(slug)}`}>인터랙티브 보기 <span class="v11-dim">►</span></a>
+      </div>
+    </article>
+
+    <!-- right: meta -->
+    <aside class="v11-post-meta-col">
+      <div class="v11-dim" style="font-size:11px;letter-spacing:0.06em;margin-bottom:10px;">// stat</div>
+      <div style="font-size:12px;line-height:1.95;">
+        <div><span class="v11-dim" style="display:inline-block;width:54px;">date</span> <span class="v11-fg">{formattedDate}</span></div>
+        <div><span class="v11-dim" style="display:inline-block;width:54px;">cat</span> <a href={`/tags`}>{fm.category}</a></div>
+        <div><span class="v11-dim" style="display:inline-block;width:54px;">tags</span> <span class="v11-fg">{(fm.tags || []).length}</span></div>
+        <div><span class="v11-dim" style="display:inline-block;width:54px;">src</span> <span class="v11-fg">.md</span></div>
+        <div><span class="v11-dim" style="display:inline-block;width:54px;">lang</span> <span class="v11-fg">ko</span></div>
+      </div>
+      <div class="v11-dim" style="font-size:11px;letter-spacing:0.06em;margin:20px 0 8px;">// $ share</div>
+      <div style="font-size:12.5px;line-height:1.95;">
+        <div><a href="#" id="share-copy">⌘C copy link</a></div>
+        <div><a href="https://xmin.sh" target="_blank" rel="noopener">→ xmin.sh</a></div>
+        <div><a href="/rss.xml">→ rss</a></div>
+      </div>
+    </aside>
+  </div>
+</Layout>
+
+<style>
+  .v11-post-grid {
+    display: grid;
+    grid-template-columns: 210px 1fr 210px;
+    gap: 36px;
+    padding: 30px 36px;
+    max-width: 1160px;
+    margin: 0 auto;
+  }
+  .v11-post-h1 {
+    margin: 8px 0 10px;
+    font-size: 30px;
+    line-height: 1.2;
+    color: var(--color-fg);
+    font-weight: 600;
+  }
+  .v11-post-meta {
+    font-size: 12px; display: flex; gap: 14px; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .v11-toc { margin: 0; padding: 0; list-style: none; }
+  .v11-toc li { padding: 4px 0; font-size: 12.5px; line-height: 1.55; }
+  .v11-toc a { color: var(--color-text); }
+  .v11-toc a:hover { color: var(--color-green-br); text-decoration: none; }
+  .v11-toc li.toc-h3 { padding-left: 14px; font-size: 12px; }
+  .v11-toc li.is-active a { color: var(--color-green); }
+  .v11-toc .toc-num { color: var(--color-dim); margin-right: 6px; }
+  .v11-post-toc-col, .v11-post-meta-col { position: sticky; top: 60px; align-self: start; height: max-content; }
+  @media (max-width: 900px) {
+    .v11-post-grid { grid-template-columns: 1fr; gap: 24px; }
+    .v11-post-toc-col { display: none; }
+    .v11-post-meta-col { position: static; border-top: 1px solid var(--color-border); padding-top: 16px; }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    var prose = document.getElementById('post-prose');
+    var tocEl = document.getElementById('post-toc');
+    if (!prose || !tocEl) return;
+    var heads = Array.prototype.slice.call(prose.querySelectorAll('h2, h3'));
+    var items = [];
+    heads.forEach(function (h, i) {
+      if (!h.id) h.id = 'sec-' + i;
+      var li = document.createElement('li');
+      li.className = h.tagName === 'H3' ? 'toc-h3' : 'toc-h2';
+      var num = h.tagName === 'H3' ? '▸' : String(i + 1).padStart(2, '0');
+      li.innerHTML = '<span class="toc-num">' + num + '</span><a href="#' + h.id + '">' + (h.textContent || '') + '</a>';
+      tocEl.appendChild(li);
+      items.push({ h: h, li: li });
+    });
+    if (!items.length) {
+      tocEl.innerHTML = '<li class="v11-dim" style="list-style:none;">(목차 없음)</li>';
+    }
+
+    var pctEl = document.getElementById('read-pct');
+    var asciiEl = document.getElementById('read-bar-ascii');
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function onScroll() {
+      var h = document.documentElement;
+      var max = h.scrollHeight - h.clientHeight;
+      var pct = max > 0 ? Math.min(1, Math.max(0, (h.scrollTop || document.body.scrollTop) / max)) : 0;
+      if (pctEl) pctEl.textContent = Math.round(pct * 100) + '%';
+      if (asciiEl) {
+        var filled = Math.round(pct * 16);
+        asciiEl.textContent = '[' + '█'.repeat(filled) + '░'.repeat(16 - filled) + ']';
+      }
+      // scroll-spy
+      var active = -1;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].h.getBoundingClientRect().top < 120) active = i;
+      }
+      items.forEach(function (it, i) { it.li.classList.toggle('is-active', i === active); });
+    }
+    if (!reduce) window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+
+    var copyBtn = document.getElementById('share-copy');
+    if (copyBtn) copyBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      navigator.clipboard && navigator.clipboard.writeText(location.href);
+      copyBtn.textContent = '✓ copied';
+      setTimeout(function () { copyBtn.textContent = '⌘C copy link'; }, 1500);
+    });
+  })();
+</script>
+
+<script is:inline>
+  // Fill "format · WxH" in the frame bar for images whose dimensions are only
+  // known at runtime (remote covers / inline images), then wire the lightbox.
+  (function () {
+    document.querySelectorAll('.imgframe').forEach(function (frame) {
+      var img = frame.querySelector('.img');
+      var res = frame.querySelector('.meta [data-res]');
+      if (!img || !res) return;
+      function fill() {
+        if (img.naturalWidth) {
+          res.hidden = false;
+          res.textContent = ' · ' + img.naturalWidth + '×' + img.naturalHeight;
+        }
+      }
+      if (img.complete) fill(); else img.addEventListener('load', fill, { once: true });
+    });
+
+    document.addEventListener('click', function (e) {
+      var img = e.target.closest && e.target.closest('.imgframe .img, .thumb img, .v11-thumb-box img');
+      if (!img) return;
+      var ov = document.createElement('div');
+      ov.className = 'lightbox';
+      var full = document.createElement('img');
+      full.src = img.currentSrc || img.src;
+      full.alt = img.alt || '';
+      ov.appendChild(full);
+      ov.addEventListener('click', function () { ov.remove(); });
+      function onKey(ev) { if (ev.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', onKey); } }
+      document.addEventListener('keydown', onKey);
+      document.body.appendChild(ov);
+    });
+  })();
+</script>

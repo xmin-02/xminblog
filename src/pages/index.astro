@@ -1,1186 +1,168 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro';
+import Layout from '../layouts/Layout.astro';
+import BootLog from '../components/BootLog.astro';
+import Neofetch from '../components/Neofetch.astro';
+import Heatmap from '../components/Heatmap.astro';
 ---
 
-<BaseLayout title="xmin.blog">
-  <div class="mx-auto max-w-6xl px-4 sm:px-5 py-8">
-    <div class="flex gap-7 items-start">
+<Layout title="xmin.blog" active={0} path="">
+  <div style="padding-top:30px;padding-bottom:26px;">
+    <BootLog />
 
-      <!-- ===== MAIN CONTENT ===== -->
-      <main class="flex-1 min-w-0">
-
-        <!-- Terminal hero (interactive) -->
-        <div class="terminal-hero mb-6" id="terminal-hero">
-          <div class="terminal-bar">
-            <span class="t-dot" style="background:#ef4444;"></span>
-            <span class="t-dot" style="background:#eab308;"></span>
-            <span class="t-dot" style="background:#22c55e;"></span>
-            <span class="terminal-title" id="term-title">xmin@blog: ~</span>
-          </div>
-          <div class="terminal-body" id="term-body" role="region" aria-label="블로그 터미널">
-            <div id="term-output" role="log" aria-live="polite"></div>
-            <div class="t-input-line" id="term-input-line">
-              <span class="t-prompt-block">
-                <span class="t-user">xmin@blog</span><span class="t-sep">:</span><span class="t-path" id="term-path">~</span><span class="t-dollar" id="term-dollar">$</span>
-              </span>
-              <input id="term-input" type="text" class="t-input" spellcheck="false" autocomplete="off" autocapitalize="off" />
-            </div>
-          </div>
+    <!-- hero + neofetch -->
+    <div class="v11-home-grid">
+      <div>
+        <div class="v11-dim" style="font-size:12px;margin-bottom:14px;">// xmin.blog — writings on security &amp; ai</div>
+        <h1 class="v11-sans v11-hero-h1">
+          보안 취약점을 찾고,<br />
+          <span class="v11-gr">AI</span>로 더 안전한<br />
+          시스템을 만듭니다.
+        </h1>
+        <p class="v11-sans" style="font-size:14.5px;color:var(--color-subtle);max-width:540px;margin-top:16px;line-height:1.75;">
+          주수민 · AI Security Engineer. 공격자 관점의 보안 리서치를 지향하고, 퍼징·바이너리 분석에 집중합니다.
+          여기엔 0-Day 라이트업, 퍼징 하네스, AI 레드팀 회고를 남깁니다.<span class="v11-cursor"></span>
+        </p>
+        <div style="margin-top:18px;font-size:12.5px;color:var(--color-subtle);line-height:2;">
+          <div><span class="v11-gr">$</span> open <a href="/posts" id="cmd-latest">posts/latest</a> <span class="v11-dim">// 최근 글</span></div>
+          <div><span class="v11-gr">$</span> cat <a href="/posts">posts/security</a> <span class="v11-dim">// 0-Day 라이트업</span></div>
+          <div><span class="v11-gr">$</span> ssh <a href="https://xmin.sh" target="_blank" rel="noopener">xmin.sh</a> <span class="v11-dim">// 포트폴리오</span></div>
         </div>
-
-        <!-- Search bar -->
-        <div class="mb-6 relative">
-          <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            id="search-input"
-            type="text"
-            placeholder="글 검색..."
-            class="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border border-[var(--color-border)] bg-[var(--color-bg-card)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
-            style="box-shadow: var(--shadow-card);"
-          />
-        </div>
-
-        <!-- Category filter (horizontal scroll) -->
-        <div class="flex gap-2 mb-6 overflow-x-auto pb-1 scrollbar-none" id="category-filter-bar"></div>
-
-        <!-- Post list -->
-        <div id="post-list">
-          <div class="text-center py-20 text-[var(--color-text-secondary)]" id="loading">
-            <div class="inline-block w-6 h-6 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin mb-3"></div>
-            <p class="text-sm">글을 불러오는 중...</p>
-          </div>
-        </div>
-      </main>
-
-      <!-- ===== SIDEBAR ===== -->
-      <aside class="w-64 shrink-0 hidden lg:block sticky top-20">
-
-        <!-- Profile card -->
-        <div class="sidebar-widget">
-          <div class="flex flex-col items-center text-center py-2">
-            <div class="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold mb-3" style="background: linear-gradient(135deg, #0d9488, #0f766e);">
-              x
-            </div>
-            <p class="font-bold text-[var(--color-text)] text-sm">주수민 <span class="font-normal text-[var(--color-text-secondary)]">/ xmin</span></p>
-            <p class="text-xs text-[var(--color-text-secondary)] mt-1">보안 · AI</p>
-            <div class="flex gap-2 mt-3">
-              <a href="https://github.com/xmin-02" target="_blank" rel="noopener" class="p-1.5 rounded-lg bg-[var(--color-bg)] hover:bg-[var(--color-bg-secondary)] transition-colors text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]" aria-label="GitHub">
-                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-                </svg>
-              </a>
-              <a href="https://xmin.sh" target="_blank" rel="noopener" class="p-1.5 rounded-lg bg-[var(--color-bg)] hover:bg-[var(--color-bg-secondary)] transition-colors text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]" aria-label="Portfolio">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
-                </svg>
-              </a>
-            </div>
-          </div>
-        </div>
-
-        <!-- Category list -->
-        <div class="sidebar-widget">
-          <p class="sidebar-widget-title">카테고리</p>
-          <ul id="sidebar-categories" class="space-y-0.5">
-            <li><button data-category="all" class="cat-item active w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm transition-colors hover:bg-[var(--color-bg)] text-left">
-              <span>전체</span><span class="text-xs text-[var(--color-text-secondary)]" id="cat-count-all">0</span>
-            </button></li>
-          </ul>
-        </div>
-
-        <!-- Recent posts -->
-        <div class="sidebar-widget">
-          <p class="sidebar-widget-title">최근 글</p>
-          <ul id="sidebar-recent" class="space-y-2.5">
-            <li class="text-xs text-[var(--color-text-secondary)]">불러오는 중...</li>
-          </ul>
-        </div>
-
-      </aside>
+      </div>
+      <Neofetch />
     </div>
+
+    <!-- posts -->
+    <div style="margin-top:24px;">
+      <div class="v11-list-head">
+        <span class="v11-dim" style="font-size:12.5px;"><span class="v11-gr">$</span> ls -lth posts/ <span class="v11-dim">| head -7</span></span>
+        <span class="v11-dim" style="font-size:11.5px;"><span class="kbd">j</span><span class="kbd">k</span> nav · <span class="kbd">⏎</span> open · <span class="kbd">/</span> search</span>
+      </div>
+      <div id="post-list">
+        <div class="v11-dim" style="font-size:12.5px;padding:14px 12px;">posts 불러오는 중…<span class="v11-cursor"></span></div>
+      </div>
+      <div class="v11-dim" id="post-foot" style="font-size:12px;margin-top:10px;text-align:right;"></div>
+    </div>
+
+    <!-- heatmap -->
+    <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--color-border);">
+      <Heatmap />
+    </div>
+
+    <!-- footer -->
+    <footer style="margin-top:28px;padding-top:14px;border-top:1px solid var(--color-border);display:flex;justify-content:space-between;font-size:12px;color:var(--color-dim);flex-wrap:wrap;gap:8px;">
+      <span>© 2026 xmin · <span class="v11-gr">no-ads</span> · <span class="v11-gr">no-trackers</span> · <span class="v11-gr">no-AI-text</span></span>
+      <span><a href="https://xmin.sh" target="_blank" rel="noopener">xmin.sh</a> · <a href="https://github.com/xmin-02" target="_blank" rel="noopener">github</a> · <a href="/rss.xml">rss</a></span>
+    </footer>
   </div>
-</BaseLayout>
+</Layout>
 
 <style is:global>
-  .scrollbar-none::-webkit-scrollbar { display: none; }
-  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-  .animate-spin {
-    animation: spin 0.8s linear infinite;
-  }
-
-  .post-card {
-    display: block;
-    padding: 1.4rem 0;
-    border: none;
-    border-bottom: 1px solid var(--color-border);
-    background: transparent;
-    text-decoration: none;
-    color: inherit;
-    transition: opacity 0.15s;
-  }
-  .post-card:hover { opacity: 0.92; }
-  .post-card:hover .post-card-title { color: var(--color-accent); }
-  .post-card-inner {
-    display: flex;
-    gap: 1rem;
-    align-items: flex-start;
-  }
-  .post-card-body {
-    min-width: 0;
-    flex: 1;
-  }
-  .post-card-cover {
-    width: 9.5rem;
-    aspect-ratio: 16 / 9;
-    flex: 0 0 auto;
-    overflow: hidden;
-    border-radius: 0.75rem;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-secondary);
-    box-shadow: var(--shadow-card);
-  }
-  .post-card-cover img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.2s ease;
-  }
-  .post-card:hover .post-card-cover img { transform: scale(1.035); }
-  .post-meta {
-    display: flex; gap: 0.55rem; align-items: center;
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    color: var(--color-text-secondary);
-    margin-bottom: 0.45rem;
-  }
-  .post-cat { color: var(--color-accent); font-weight: 500; }
-  .post-meta-mute { color: var(--color-text-secondary); opacity: 0.85; }
-  .post-card-title {
-    font-size: 1.05rem; font-weight: 600; line-height: 1.45;
-    color: var(--color-text); margin-bottom: 0.45rem;
-    transition: color 0.2s;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  }
-  .post-desc {
-    font-size: 0.875rem; color: var(--color-text-secondary);
-    line-height: 1.6;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  }
-  @media (max-width: 640px) {
-    .post-card-inner { gap: 0.8rem; }
-    .post-card-cover { width: 6.5rem; border-radius: 0.6rem; }
-    .post-card-title { font-size: 1rem; -webkit-line-clamp: 2; }
-    .post-desc { -webkit-line-clamp: 1; }
-  }
-
-  .post-card-wrap { position: relative; }
-  .admin-card-btns {
-    position: absolute; top: 0.5rem; right: 0.5rem;
-    display: flex; gap: 0.25rem;
-    opacity: 0; transition: opacity 0.15s;
-    pointer-events: none;
-  }
-  .post-card-wrap:hover .admin-card-btns { opacity: 1; pointer-events: auto; }
-  .admin-card-btn {
-    width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--color-bg-card); border: 1px solid var(--color-border);
-    color: var(--color-text-secondary); cursor: pointer;
-    text-decoration: none; transition: all 0.15s; padding: 0;
-  }
-  .admin-card-btn:hover { background: var(--color-accent); color: white; border-color: var(--color-accent); }
-  .admin-card-btn.del:hover { background: #ef4444; border-color: #ef4444; }
-
-  /* ── Terminal hero ── */
-  .terminal-hero {
-    border: 1px solid var(--color-border);
-    border-radius: 0.625rem;
-    background: var(--color-bg-card);
-    overflow: hidden;
-    font-family: var(--font-mono);
-    box-shadow: var(--shadow-card);
-  }
-  .terminal-bar {
-    display: flex; align-items: center; gap: 0.45rem;
-    padding: 0.5rem 0.85rem;
-    background: var(--color-bg-secondary);
+  .v11-home-grid {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 40px;
+    margin-top: 24px;
+    padding-bottom: 26px;
     border-bottom: 1px solid var(--color-border);
   }
-  .t-dot {
-    width: 0.7rem; height: 0.7rem; border-radius: 9999px;
-    display: inline-block; opacity: 0.85;
+  .v11-hero-h1 {
+    font-size: 34px;
+    line-height: 1.25;
+    margin: 0;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: var(--color-fg);
   }
-  .terminal-title {
-    margin-left: 0.5rem;
-    font-size: 0.72rem;
-    color: var(--color-text-secondary);
-    letter-spacing: 0.02em;
+  .v11-list-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 12px; font-family: var(--font-mono);
   }
-  .terminal-body {
-    padding: 0.85rem 1rem 0.95rem;
-    font-size: 0.82rem;
-    line-height: 1.75;
-    color: var(--color-text);
-    min-height: 200px;
-    max-height: 260px;
-    overflow-y: auto;
-    cursor: text;
-  }
-  .terminal-body::-webkit-scrollbar { width: 6px; }
-  .terminal-body::-webkit-scrollbar-track { background: transparent; }
-  .terminal-body::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
-  .t-line { white-space: pre-wrap; word-break: break-word; }
-  .t-prompt { color: var(--color-accent); font-weight: 600; }
-  .t-user { color: var(--color-accent); font-weight: 600; }
-  .t-sep { color: var(--color-text-secondary); }
-  .t-path { color: var(--color-accent-alt, #10b981); font-weight: 600; }
-  .t-dollar { color: var(--color-text-secondary); margin-left: 0.15rem; margin-right: 0.35rem; }
-  .t-cmd { color: var(--color-text); }
-  .t-out {
-    color: var(--color-text-secondary);
-    padding-left: 0.15rem;
-    padding-bottom: 0.2rem;
-  }
-  .t-out .tag { color: var(--color-accent); }
-  .t-out .num { color: var(--color-accent-bright, var(--color-accent)); font-weight: 600; }
-  .t-cursor {
-    display: inline-block;
-    color: var(--color-accent);
-    animation: t-blink 1.1s steps(2, start) infinite;
-  }
-  @keyframes t-blink { to { opacity: 0; } }
-
-  .t-input-line {
-    display: flex;
+  .v11-post-row {
+    display: grid;
+    grid-template-columns: 14px 102px 1fr 180px 50px;
+    gap: 14px;
     align-items: baseline;
-    gap: 0.35rem;
-    white-space: nowrap;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-border);
+    border-left: 2px solid transparent;
+    color: inherit;
   }
-  .t-prompt-block { white-space: nowrap; flex-shrink: 0; }
-  .t-input {
-    flex: 1;
-    min-width: 0;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: var(--color-text);
-    font: inherit;
-    padding: 0;
-    caret-color: var(--color-accent);
+  .v11-post-row:hover { text-decoration: none; }
+  .v11-post-row:hover .v11-post-title { color: var(--color-green-br); }
+  .v11-post-row.is-first { background: var(--color-panel); border-left-color: var(--color-green); }
+  .v11-post-title { color: var(--color-fg); font-family: var(--font-sans); font-size: 14.5px; }
+  @media (max-width: 720px) {
+    .v11-home-grid { grid-template-columns: 1fr; gap: 24px; }
+    .v11-post-row { grid-template-columns: 12px 84px 1fr; }
+    .v11-post-row .v11-post-tags, .v11-post-row .v11-post-read { display: none; }
   }
-  .t-error { color: #ef4444; }
-  .t-ok { color: #22c55e; }
-  .t-warn { color: #eab308; }
-  .t-dim { color: var(--color-text-secondary); }
-  .t-post-name { color: var(--color-accent-bright, var(--color-accent)); }
-  .t-dir-name { color: var(--color-accent-alt, #10b981); font-weight: 600; }
-  .t-priv { color: #eab308; }
 </style>
 
-<script is:inline>
+<script>
+  import { areaForPost as areaFor } from '../lib/area';
+
   const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
-  let allPosts = [];
-  let activeCategory = 'all';
-  let searchQuery = '';
 
-  function esc(str) {
-    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  function esc(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function postUrl(slug) { return `/post/?slug=${encodeURIComponent(slug)}`; }
+
+  function readTime(post) {
+    const n = ((post.title || '').length + (post.description || '').length) * 6 + 600;
+    return Math.max(3, Math.round(n / 350)) + 'm';
+  }
+  function fmtDate(d) {
+    if (!d) return '';
+    try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; }
   }
 
-  function isAdminUser() {
-    try { return JSON.parse(localStorage.getItem('auth_user') || '{}').role === 'admin'; } catch { return false; }
-  }
-
-  function postUrl(slug) {
-    return `/post/?slug=${encodeURIComponent(slug)}`;
-  }
-
-  function renderPosts(posts) {
+  function renderRows(posts) {
     const list = document.getElementById('post-list');
-    const isAdmin = isAdminUser();
+    const foot = document.getElementById('post-foot');
     if (!posts.length) {
-      list.innerHTML = `<div class="text-center py-20 text-[var(--color-text-secondary)]">
-        <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-        </svg>
-        <p class="text-sm">해당하는 글이 없습니다.</p>
-      </div>`;
+      list.innerHTML = '<div class="v11-dim" style="font-size:12.5px;padding:14px 12px;">해당하는 글이 없습니다.</div>';
+      if (foot) foot.textContent = '';
       return;
     }
-
-    list.innerHTML = posts.map((post) => {
-      const date = post.date ? new Date(post.date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-      const adminBtns = isAdmin ? `
-        <div class="admin-card-btns">
-          <a href="${postUrl(post.slug)}" class="admin-card-btn" title="편집" onclick="event.stopPropagation();">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </a>
-          <button class="admin-card-btn del" title="삭제" onclick="event.preventDefault();event.stopPropagation();adminDeletePost('${esc(post.slug)}');">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-          </button>
-        </div>` : '';
-      const lockIcon = post.is_private ? `<svg class="inline-block w-3.5 h-3.5 align-[-2px] mr-1" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" style="color:#ca8a04;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>` : '';
-      const cover = post.cover ? `<div class="post-card-cover"><img src="${esc(post.cover)}" alt="${esc(post.title)} 대표 이미지" loading="lazy" /></div>` : '';
-      return `
-        <div class="post-card-wrap">
-          <a href="${postUrl(post.slug)}" class="post-card" data-category="${esc(post.category)}">
-            <div class="post-card-inner">
-              <div class="post-card-body">
-                <div class="post-meta">
-                  ${post.category ? `<span class="post-cat">[${esc(post.category)}]</span>` : ''}
-                  <span>${esc(date)}</span>
-                  ${post.is_private ? '<span style="color:#ca8a04;">비공개</span>' : ''}
-                </div>
-                <h2 class="post-card-title">${lockIcon}${esc(post.title)}</h2>
-                <p class="post-desc">${esc(post.description)}</p>
-              </div>
-              ${cover}
-            </div>
-          </a>
-          ${adminBtns}
-        </div>
-      `;
+    const top = posts.slice(0, 7);
+    list.innerHTML = top.map((p, i) => {
+      const area = areaFor(p);
+      const tags = (p.tags || []).slice(0, 2).map((t) => `<span class="v11-tag ${area}" style="margin-right:8px;">#${esc(t)}</span>`).join('');
+      const lock = p.is_private ? '<span class="lvl lvl-warn" style="font-size:9.5px;margin-left:6px;">priv</span>' : '';
+      return `<a href="${postUrl(p.slug)}" class="v11-post-row${i === 0 ? ' is-first' : ''}">
+        <span style="font-size:12px;color:${i === 0 ? 'var(--color-green)' : 'var(--color-dim)'};">${i === 0 ? '▸' : '·'}</span>
+        <span class="v11-dim" style="font-size:12px;">${esc(fmtDate(p.date))}</span>
+        <span class="v11-post-title" style="font-weight:${i === 0 ? 600 : 400};">${esc(p.title)}${lock}</span>
+        <span class="v11-post-tags" style="font-size:11px;">${tags}</span>
+        <span class="v11-post-read v11-dim" style="font-size:11.5px;text-align:right;">${readTime(p)}</span>
+      </a>`;
     }).join('');
+    if (foot) foot.innerHTML = `${top.length} / ${posts.length} · <a href="/posts">cat archive</a>`;
   }
 
-  async function adminDeletePost(slug) {
-    if (!confirm(`"${slug}" 글을 삭제할까요?`)) return;
-    const token = localStorage.getItem('auth_token');
-    try {
-      const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({}),
-      });
-      if (res.ok) {
-        allPosts = allPosts.filter(p => p.slug !== slug);
-        filterAndSearch();
-      } else {
-        const d = await res.json();
-        alert('삭제 실패: ' + (d.error || res.status));
-      }
-    } catch (e) {
-      alert('오류: ' + e.message);
-    }
-  }
-
-  function normalizeSearchText(value) {
-    return String(value || '').toLowerCase().normalize('NFKC');
-  }
-
-  function postSearchText(post) {
-    return normalizeSearchText([
-      post.title,
-      post.description,
-      post.category,
-      post.slug,
-      ...(Array.isArray(post.tags) ? post.tags : []),
-    ].join(' '));
-  }
-
-  function filterAndSearch() {
-    let filtered = allPosts;
-    if (activeCategory !== 'all') {
-      filtered = filtered.filter(p => p.category === activeCategory);
-    }
-    if (searchQuery) {
-      const terms = normalizeSearchText(searchQuery).split(/\s+/).filter(Boolean);
-      filtered = filtered.filter(p => terms.every(term => postSearchText(p).includes(term)));
-    }
-    renderPosts(filtered);
-
-    // Update active state on category filter bar
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.category === activeCategory);
-    });
-    document.querySelectorAll('.cat-item').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.category === activeCategory);
+  function updateCounts(n) {
+    document.querySelectorAll('[data-posts-count]').forEach((el) => { el.textContent = n; });
+    document.querySelectorAll('[data-mount-posts]').forEach((el) => {
+      el.textContent = el.textContent.replace(/\(\d+ entries/, `(${n} entries`);
     });
   }
 
-  function selectCategory(category, updateUrl = true) {
-    activeCategory = category || 'all';
-    if (updateUrl) {
-      const url = new URL(window.location.href);
-      if (activeCategory === 'all') url.searchParams.delete('category');
-      else url.searchParams.set('category', activeCategory);
-      history.replaceState(null, '', url.pathname + url.search + url.hash);
-    }
-    filterAndSearch();
-  }
-
-  async function loadPosts() {
+  async function load() {
     try {
       const res = await fetch(`${API_BASE}/api/posts`);
-      if (!res.ok) throw new Error('API error');
+      if (!res.ok) throw new Error('api');
       const data = await res.json();
-      allPosts = data.filter(p => !p.draft && !p.is_private);
-
-      document.getElementById('loading')?.remove();
-
-      // Build categories
-      const catCounts = {};
-      allPosts.forEach(p => {
-        if (p.category) catCounts[p.category] = (catCounts[p.category] || 0) + 1;
-      });
-      const cats = Object.keys(catCounts);
-      const requestedCategory = new URLSearchParams(window.location.search).get('category');
-      activeCategory = requestedCategory && catCounts[requestedCategory] ? requestedCategory : 'all';
-
-      // Horizontal filter bar (top of main)
-      const filterBar = document.getElementById('category-filter-bar');
-      filterBar.innerHTML = ['전체', ...cats].map(cat => {
-        const isAll = cat === '전체';
-        const key = isAll ? 'all' : cat;
-        return `<button data-category="${esc(key)}" class="filter-btn shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all border border-[var(--color-border)] bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] whitespace-nowrap ${key === activeCategory ? 'active' : ''}">${esc(cat)}</button>`;
-      }).join('');
-
-      filterBar.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          selectCategory(btn.dataset.category);
-        });
-      });
-
-      // Sidebar category list
-      const sidebarCats = document.getElementById('sidebar-categories');
-      const allCount = document.getElementById('cat-count-all');
-      if (allCount) allCount.textContent = allPosts.length;
-
-      cats.forEach(cat => {
-        const li = document.createElement('li');
-        li.innerHTML = `<button data-category="${esc(cat)}" class="cat-item w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm transition-colors hover:bg-[var(--color-bg)] text-left">
-          <span>${esc(cat)}</span><span class="text-xs text-[var(--color-text-secondary)]">${catCounts[cat]}</span>
-        </button>`;
-        sidebarCats?.appendChild(li);
-      });
-
-      // Update sidebar "전체" button count
-      const allBtn = sidebarCats?.querySelector('[data-category="all"]');
-      if (allBtn) {
-        const span = allBtn.querySelector('span:last-child');
-        if (span) span.textContent = allPosts.length;
-      }
-
-      sidebarCats?.querySelectorAll('.cat-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-          selectCategory(btn.dataset.category);
-        });
-      });
-
-      // Sidebar recent posts
-      const recentEl = document.getElementById('sidebar-recent');
-      if (recentEl) {
-        const recent = allPosts.slice(0, 5);
-        recentEl.innerHTML = recent.map(p => {
-          const date = p.date ? new Date(p.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
-          return `<li>
-            <a href="${postUrl(p.slug)}" class="block group">
-              <p class="text-xs font-medium text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors line-clamp-2 leading-snug">${esc(p.title)}</p>
-              <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">${esc(date)}</p>
-            </a>
-          </li>`;
-        }).join('');
-      }
-
-      // Search
-      const searchInput = document.getElementById('search-input');
-      searchInput?.addEventListener('input', e => {
-        searchQuery = e.target.value.trim();
-        filterAndSearch();
-      });
-
-      filterAndSearch();
-      initTerminal(allPosts);
-
-    } catch (err) {
-      const loading = document.getElementById('loading');
-      if (loading) {
-        loading.innerHTML = '<p class="text-sm">글을 불러오지 못했습니다.</p>';
-      }
-      const recentEl = document.getElementById('sidebar-recent');
-      if (recentEl) {
-        recentEl.innerHTML = '<li class="text-xs text-[var(--color-text-secondary)]">불러오기 실패</li>';
-      }
-      console.error(err);
+      const posts = data.filter((p) => !p.draft && !p.is_private)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      renderRows(posts);
+      updateCounts(posts.length);
+      const latest = posts[0];
+      if (latest) document.getElementById('cmd-latest')?.setAttribute('href', postUrl(latest.slug));
+    } catch (e) {
+      document.getElementById('post-list').innerHTML =
+        '<div class="v11-rd" style="font-size:12.5px;padding:14px 12px;">posts를 불러오지 못했습니다.</div>';
     }
   }
-
-  // ── Interactive terminal ─────────────────────────────────────────────────
-
-  async function verifyPostPassword(slug, password) {
-    try {
-      const res = await fetch(`${API_BASE}/api/posts/${encodeURIComponent(slug)}/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return null;
-  }
-
-  function initTerminal(posts) {
-    const body = document.getElementById('term-body');
-    const out = document.getElementById('term-output');
-    const input = document.getElementById('term-input');
-    const pathEl = document.getElementById('term-path');
-    const dollarEl = document.getElementById('term-dollar');
-    const titleEl = document.getElementById('term-title');
-    const inputLine = document.getElementById('term-input-line');
-    if (!body || !input) return;
-
-    // Build virtual FS: /home/xmin/posts/<category>/<slug>
-    const fs = { _type: 'dir' };
-    const home = fs['home'] = { _type: 'dir' };
-    const xmin = home['xmin'] = { _type: 'dir' };
-    const postsDir = xmin['posts'] = { _type: 'dir' };
-    xmin['about'] = { _type: 'link', url: '/about' };
-    for (const p of posts) {
-      const cat = p.category || 'misc';
-      if (!postsDir[cat]) postsDir[cat] = { _type: 'dir' };
-      postsDir[cat][p.slug] = {
-        _type: 'post',
-        slug: p.slug,
-        title: p.title,
-        description: p.description || '',
-        date: p.date || '',
-        tags: p.tags || [],
-        is_private: !!p.is_private,
-      };
-    }
-
-    let cwd = '/home/xmin';
-    let previousCwd = cwd;
-    const history = [];
-    let historyIdx = -1;
-    let pendingPw = null; // { slug, newTab }
-
-    function isMeta(k) { return k === '_type' || k === 'url' || k === 'slug' || k === 'title' || k === 'description' || k === 'date' || k === 'tags' || k === 'is_private'; }
-
-    const accidentalKoreanMap = {
-      'ㅣㄴ': 'ls',
-      'ㅊㅇ': 'cd',
-      'ㅔㅈㅇ': 'pwd',
-      'ㅐㅔ둗': 'open',
-      'ㅐㅔㄷㅜ': 'open',
-      'ㅊㅁㅅ': 'cat',
-      'ㅗ디ㅔ': 'help',
-      'ㅗㅑㄴ새교': 'history',
-      'ㅊㅣㄷㅁㄱ': 'clear',
-    };
-
-    function normalizeTerminalCommand(cmd) {
-      return accidentalKoreanMap[cmd] || cmd;
-    }
-
-    function splitCommandLine(raw) {
-      const words = shellWords(raw);
-      return { cmd: words[0] || '', args: words.slice(1).join(' '), words };
-    }
-
-    function shellWords(raw) {
-      const words = [];
-      let cur = '';
-      let quote = '';
-      let escaping = false;
-      for (const ch of String(raw || '').trim()) {
-        if (escaping) { cur += ch; escaping = false; continue; }
-        if (ch === '\\') { escaping = true; continue; }
-        if (quote) {
-          if (ch === quote) quote = '';
-          else cur += ch;
-          continue;
-        }
-        if (ch === '"' || ch === "'") { quote = ch; continue; }
-        if (/\s/.test(ch)) {
-          if (cur) { words.push(cur); cur = ''; }
-          continue;
-        }
-        cur += ch;
-      }
-      if (cur) words.push(cur);
-      return words;
-    }
-
-    function stripDecorativeSuffix(value) {
-      return String(value || '').replace(/[@*]$/, '');
-    }
-
-    function globToRegExp(pattern) {
-      const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*/g, '.*')
-        .replace(/\?/g, '.');
-      return new RegExp(`^${escaped}$`, 'i');
-    }
-
-    function displayNodeName(name, node) {
-      if (node?._type === 'dir') return `${name}/`;
-      if (node?._type === 'post') return `${name}*`;
-      if (node?._type === 'link') return `${name}@`;
-      return name;
-    }
-
-    function getNode(path) {
-      const parts = path.split('/').filter(Boolean);
-      let node = fs;
-      for (const p of parts) {
-        if (!node || typeof node !== 'object') return null;
-        const clean = stripDecorativeSuffix(p);
-        const key = node[p] ? p : (node[clean] ? clean : p);
-        if (!node[key]) return null;
-        node = node[key];
-      }
-      return node;
-    }
-
-    function resolvePath(arg) {
-      if (!arg || arg === '~') return '/home/xmin';
-      if (arg.startsWith('~/')) arg = '/home/xmin/' + arg.slice(2);
-      const base = arg.startsWith('/') ? '' : cwd;
-      const parts = (base + '/' + arg).split('/').filter(Boolean);
-      const resolved = [];
-      for (const p of parts) {
-        if (p === '..') resolved.pop();
-        else if (p !== '.') resolved.push(p);
-      }
-      return '/' + resolved.join('/');
-    }
-
-    function shortPath(p) {
-      if (p === '/home/xmin') return '~';
-      if (p.startsWith('/home/xmin/')) return '~/' + p.slice(11);
-      return p;
-    }
-
-    function updatePrompt() {
-      pathEl.textContent = shortPath(cwd);
-      titleEl.textContent = 'xmin@blog: ' + shortPath(cwd);
-    }
-
-    function append(html, cls) {
-      const line = document.createElement('div');
-      if (cls) line.className = cls;
-      line.innerHTML = html;
-      out.appendChild(line);
-      body.scrollTop = body.scrollHeight;
-    }
-
-    function echoCmd(raw) {
-      append(`<span class="t-user">xmin@blog</span><span class="t-sep">:</span><span class="t-path">${esc(shortPath(cwd))}</span><span class="t-dollar">$</span> ${esc(raw)}`);
-    }
-
-    function lsDir(node) {
-      const dirs = [], posts = [], links = [];
-      for (const k of Object.keys(node)) {
-        if (isMeta(k)) continue;
-        const child = node[k];
-        if (!child || typeof child !== 'object') continue;
-        if (child._type === 'dir') dirs.push(k);
-        else if (child._type === 'post') posts.push({ k, is_private: child.is_private });
-        else if (child._type === 'link') links.push(k);
-      }
-      dirs.sort(); posts.sort((a,b)=>a.k.localeCompare(b.k)); links.sort();
-      return { dirs, posts, links };
-    }
-
-    function renderNodeName(name, node, long = false) {
-      if (node?._type === 'dir') return `<span class="t-dir-name">${esc(name)}/</span>${long ? ' <span class="t-dim">directory</span>' : ''}`;
-      if (node?._type === 'post') {
-        const lock = node.is_private ? '<span class="t-priv">🔒</span>' : '';
-        const meta = long ? ` <span class="t-dim">— ${esc(node.title || node.slug)}</span>` : '';
-        return `${lock}<span class="t-post-name">${esc(name)}</span>*${meta}`;
-      }
-      if (node?._type === 'link') return `<span class="t-ok">${esc(name)}@</span>${long ? ` <span class="t-dim">-> ${esc(node.url)}</span>` : ''}`;
-      return esc(name);
-    }
-
-    function findPathMatches(arg) {
-      const input = (arg || '').trim();
-      const path = resolvePath(input);
-      const slash = path.lastIndexOf('/');
-      const parentPath = slash >= 0 ? path.slice(0, slash) || '/' : cwd;
-      const basename = slash >= 0 ? path.slice(slash + 1) : input;
-      const parent = getNode(parentPath);
-      if (!parent || parent._type !== 'dir') return [];
-      const pattern = basename.endsWith('@') ? basename.slice(0, -1) : basename;
-      const re = globToRegExp(pattern);
-      return Object.keys(parent)
-        .filter(k => !isMeta(k) && parent[k] && re.test(k))
-        .sort((a, b) => a.localeCompare(b))
-        .map(k => ({ name: k, node: parent[k], path: `${parentPath}/${k}`.replace(/\/+/g, '/') }));
-    }
-
-    function cmdLs(args) {
-      const words = shellWords(args);
-      const long = words.some(w => /^-[alh]+$/.test(w));
-      const targets = words.filter(w => !/^-[alh]+$/.test(w));
-      const target = targets.join(' ');
-      if (target && /[*?]/.test(target)) {
-        const matches = findPathMatches(target);
-        if (!matches.length) { append(`<span class="t-error">ls: ${esc(target)}: 없음</span>`); return; }
-        append(matches.map(m => renderNodeName(m.name, m.node, long)).join(long ? '<br>' : '  '));
-        return;
-      }
-      const path = target ? resolvePath(target) : cwd;
-      const node = getNode(path);
-      if (!node) {
-        append(`<span class="t-error">ls: ${esc(target || shortPath(path))}: 없음</span>`);
-        suggestPath(target || shortPath(path), 'ls');
-        return;
-      }
-      if (node._type === 'post') { append(renderNodeName(node.slug, node, true)); return; }
-      if (node._type === 'link') {
-        const display = target || shortPath(path);
-        const shown = display.endsWith('@') ? display : `${display}@`;
-        append(`<span class="t-ok">${esc(shown)}</span> <span class="t-dim">-> ${esc(node.url)}</span>`);
-        return;
-      }
-      if (node._type !== 'dir') {
-        append(`<span class="t-error">ls: ${esc(target || shortPath(path))}: 디렉터리 없음</span>`);
-        return;
-      }
-      const { dirs, posts, links } = lsDir(node);
-      const parts = [];
-      for (const d of dirs) parts.push(renderNodeName(d, node[d], long));
-      for (const p of posts) parts.push(renderNodeName(p.k, node[p.k], long));
-      for (const l of links) parts.push(renderNodeName(l, node[l], long));
-      if (!parts.length) { append('<span class="t-dim">(비어 있음)</span>'); return; }
-      append(parts.join(long ? '<br>' : '  '));
-    }
-
-    function cmdCd(args) {
-      const words = shellWords(args);
-      const t = words.join(' ').trim();
-      if (!t) { previousCwd = cwd; cwd = '/home/xmin'; updatePrompt(); return; }
-      if (t === '-') { const next = previousCwd; previousCwd = cwd; cwd = next; updatePrompt(); cmdPwd(); return; }
-      const path = resolvePath(t);
-      const node = getNode(path);
-      if (!node) { append(`<span class="t-error">cd: ${esc(t)}: 디렉터리 없음</span>`); suggestPath(t, 'cd'); return; }
-      if (node._type === 'link') { append(`<span class="t-error">cd: ${esc(t)}: 링크입니다</span> <span class="t-dim">열기: <span class="t-ok">open ${esc(t)}</span></span>`); return; }
-      if (node._type !== 'dir') { append(`<span class="t-error">cd: ${esc(t)}: 디렉터리가 아님</span>`); return; }
-      previousCwd = cwd;
-      cwd = path;
-      updatePrompt();
-    }
-
-    function cmdPwd() { append(`<span class="t-dim">${esc(cwd)}</span>`); }
-
-    function findLink(arg) {
-      const input = (arg || '').trim();
-      if (!input) return null;
-      const clean = stripDecorativeSuffix(input);
-      const path = resolvePath(clean);
-      const node = getNode(path);
-      if (node?._type === 'link') return { node, path };
-      if (!clean.includes('/')) {
-        const homePath = `/home/xmin/${clean}`;
-        const homeNode = getNode(homePath);
-        if (homeNode?._type === 'link') return { node: homeNode, path: homePath };
-      }
-      return null;
-    }
-
-    function suggestPath(input, action = 'open') {
-      const raw = (input || '').trim();
-      if (!raw) return;
-      const path = resolvePath(raw);
-      const slash = path.lastIndexOf('/');
-      const parentPath = slash >= 0 ? path.slice(0, slash) || '/' : cwd;
-      const name = slash >= 0 ? path.slice(slash + 1).replace(/[@*]$/, '') : raw.replace(/[@*]$/, '');
-      const parent = getNode(parentPath);
-      if (!parent || parent._type !== 'dir' || !name) return;
-      const matches = Object.keys(parent)
-        .filter(k => !isMeta(k) && k.toLowerCase().startsWith(name.toLowerCase()))
-        .slice(0, 8);
-      if (!matches.length) return;
-      append('<span class="t-dim">혹시 이것?</span> ' + matches.map(k => {
-        const display = displayNodeName(k, parent[k]);
-        const prefix = raw.includes('/') ? raw.slice(0, raw.lastIndexOf('/') + 1) : '';
-        return `<span class="t-ok">${esc(action)} ${esc(prefix + display)}</span>`;
-      }).join('  '));
-    }
-
-    function findPostMatches(arg) {
-      let input = (arg || '').trim();
-      if (!input) return [];
-      const decorativePost = input.endsWith('*') && !/[*?]/.test(input.slice(0, -1));
-      if (decorativePost && getNode(resolvePath(input.slice(0, -1)))) {
-        const decoratedPath = resolvePath(input);
-        const slash = decoratedPath.lastIndexOf('/');
-        const decoratedParentPath = slash >= 0 ? decoratedPath.slice(0, slash) || '/' : cwd;
-        const decoratedBasename = slash >= 0 ? decoratedPath.slice(slash + 1) : input;
-        const decoratedParent = getNode(decoratedParentPath);
-        const decoratedRe = globToRegExp(decoratedBasename);
-        const decoratedMatches = decoratedParent && decoratedParent._type === 'dir'
-          ? Object.keys(decoratedParent).filter(k => !isMeta(k) && decoratedParent[k]?._type === 'post' && decoratedRe.test(k)).length
-          : 0;
-        if (decoratedMatches <= 1) input = input.slice(0, -1);
-      }
-      const hasGlob = /[*?]/.test(input);
-      const path = resolvePath(input);
-      const node = getNode(path);
-      if (!hasGlob && node && node._type === 'post') return [{ node, path }];
-
-      const slash = path.lastIndexOf('/');
-      const parentPath = slash >= 0 ? path.slice(0, slash) || '/' : cwd;
-      const basename = slash >= 0 ? path.slice(slash + 1) : input;
-      const parent = getNode(parentPath);
-      const hasPathSyntax = input.includes('/') || input.startsWith('~');
-      if (hasGlob && parent && parent._type === 'dir') {
-        const re = globToRegExp(basename);
-        const localMatches = Object.keys(parent)
-          .filter(k => !isMeta(k) && parent[k]?._type === 'post' && re.test(k))
-          .sort((a, b) => a.localeCompare(b))
-          .map(k => ({ node: parent[k], path: `${parentPath}/${k}`.replace(/\/+/g, '/') }));
-        if (hasPathSyntax || localMatches.length) return localMatches;
-      }
-
-      const matches = [];
-      const re = hasGlob ? globToRegExp(input) : null;
-      for (const catKey of Object.keys(postsDir)) {
-        if (isMeta(catKey)) continue;
-        const cat = postsDir[catKey];
-        if (!cat || cat._type !== 'dir') continue;
-        for (const slugKey of Object.keys(cat)) {
-          if (isMeta(slugKey) || cat[slugKey]?._type !== 'post') continue;
-          if ((!hasGlob && slugKey === input) || (hasGlob && re.test(slugKey))) {
-            matches.push({ node: cat[slugKey], path: `/home/xmin/posts/${catKey}/${slugKey}` });
-          }
-        }
-      }
-      return matches.sort((a, b) => a.node.slug.localeCompare(b.node.slug));
-    }
-
-    function findPost(arg) {
-      const matches = findPostMatches(arg);
-      return matches.length === 1 ? matches[0] : null;
-    }
-
-    function renderPostMatches(label, matches, action = 'open') {
-      append(`<span class="t-warn">${esc(label)}: ${matches.length}개 글이 일치합니다. 하나를 더 구체적으로 지정하세요.</span>`);
-      for (const m of matches.slice(0, 12)) {
-        const lock = m.node.is_private ? ' <span class="t-priv">🔒</span>' : '';
-        const displayPath = shortPath(m.path);
-        append(`  <span class="t-post-name">${esc(displayPath)}</span>${lock} <span class="t-dim">— ${esc(m.node.title)}</span> <span class="t-ok">${esc(action)} ${esc(displayPath)}</span>`);
-      }
-      if (matches.length > 12) append(`<span class="t-dim">… ${matches.length - 12}개 더 있음</span>`);
-    }
-
-    function cmdCat(args) {
-      const t = shellWords(args).join(' ').trim();
-      if (!t) { append('<span class="t-error">cat: 인자 필요</span>'); return; }
-      const direct = getNode(resolvePath(stripDecorativeSuffix(t)));
-      if (direct?._type === 'dir') { append(`<span class="t-error">cat: ${esc(t)}: 디렉터리입니다</span> <span class="t-dim">목록: <span class="t-ok">ls ${esc(t)}</span></span>`); return; }
-      const link = findLink(t);
-      if (link) { append(`<span class="t-ok">${esc(t)}</span> <span class="t-dim">-> ${esc(link.node.url)} · 열기: <span class="t-ok">open ${esc(t)}</span></span>`); return; }
-      const matches = findPostMatches(t);
-      if (matches.length > 1) { renderPostMatches('cat', matches, 'cat'); return; }
-      const found = matches[0];
-      if (!found) { append(`<span class="t-error">cat: ${esc(t)}: 파일 없음</span>`); suggestPath(t, 'cat'); return; }
-      const n = found.node;
-      const tagStr = (n.tags || []).map(x => `<span class="tag">[${esc(x)}]</span>`).join(' ');
-      const lock = n.is_private ? ' <span class="t-priv">🔒 비공개</span>' : '';
-      append(`<span class="t-warn">── ${esc(n.title)} ──</span>${lock}`);
-      append(`<span class="t-dim">${esc(n.date)} · ${esc(n.slug)}</span>`);
-      if (n.description) append(esc(n.description));
-      if (tagStr) append(tagStr);
-      append(`<span class="t-dim">열기: <span class="t-ok">open ${esc(n.slug)}</span> <span class="t-dim">(-n 새 탭)</span></span>`);
-    }
-
-    function navigate(slug, newTab) {
-      const url = postUrl(slug);
-      if (newTab) window.open(url, '_blank');
-      else window.location.href = url;
-    }
-
-    function navigateUrl(url, newTab) {
-      if (newTab) window.open(url, '_blank');
-      else window.location.href = url;
-    }
-
-    async function openWithPasswordCheck(node, newTab) {
-      if (!node.is_private) {
-        append(`<span class="t-ok">열기...</span> <span class="t-dim">${esc(postUrl(node.slug))}</span>`);
-        setTimeout(() => navigate(node.slug, newTab), 120);
-        return;
-      }
-      const cached = sessionStorage.getItem(`post_pw_${node.slug}`);
-      if (cached) {
-        const ok = await verifyPostPassword(node.slug, cached);
-        if (ok && ok.content != null) { navigate(node.slug, newTab); return; }
-        sessionStorage.removeItem(`post_pw_${node.slug}`);
-      }
-      // Inline password prompt
-      pendingPw = { slug: node.slug, newTab };
-      input.type = 'password';
-      input.placeholder = '암호';
-      pathEl.innerHTML = `<span class="t-priv">password:${esc(node.slug)}</span>`;
-      dollarEl.textContent = '';
-      append(`<span class="t-warn">🔒 비공개 글입니다. 암호를 입력하세요 (취소: Ctrl+C)</span>`);
-    }
-
-    async function cmdOpen(args) {
-      const words = shellWords(args);
-      let newTab = false;
-      const targets = [];
-      for (const w of words) {
-        if (w === '-n' || w === '--new') newTab = true;
-        else targets.push(w);
-      }
-      const target = targets.join(' ');
-      if (!target) { append('<span class="t-error">open: 인자 필요 (예: open hello-world)</span>'); return; }
-      const direct = getNode(resolvePath(stripDecorativeSuffix(target)));
-      if (direct?._type === 'dir') { append(`<span class="t-error">open: ${esc(target)}: 디렉터리입니다</span> <span class="t-dim">이동: <span class="t-ok">cd ${esc(target)}</span></span>`); return; }
-      const link = findLink(target);
-      if (link) {
-        append(`<span class="t-ok">열기...</span> <span class="t-dim">${esc(link.node.url)}</span>`);
-        setTimeout(() => navigateUrl(link.node.url, newTab), 120);
-        return;
-      }
-      const matches = findPostMatches(target);
-      if (matches.length > 1) { renderPostMatches('open', matches, 'open'); return; }
-      const found = matches[0];
-      if (!found) { append(`<span class="t-error">open: ${esc(target)}: 글 없음</span>`); suggestPath(target, 'open'); return; }
-      await openWithPasswordCheck(found.node, newTab);
-    }
-
-    function cmdTree(args) {
-      const target = shellWords(args).join(' ').trim();
-      const path = target ? resolvePath(target) : cwd;
-      const node = getNode(path);
-      if (!node) { append(`<span class="t-error">tree: ${esc(target || shortPath(path))}: 없음</span>`); return; }
-      const rows = [];
-      function walk(name, n, prefix, depth) {
-        rows.push(`${prefix}${displayNodeName(name, n)}`);
-        if (!n || n._type !== 'dir' || depth >= 2) return;
-        const kids = Object.keys(n).filter(k => !isMeta(k)).sort((a, b) => a.localeCompare(b));
-        kids.slice(0, 40).forEach((k, idx) => walk(k, n[k], prefix + (idx === kids.length - 1 ? '└─ ' : '├─ '), depth + 1));
-        if (kids.length > 40) rows.push(`${prefix}… ${kids.length - 40} more`);
-      }
-      walk(shortPath(path), node, '', 0);
-      append(`<span class="t-dim">${esc(rows.join('\n'))}</span>`.replace(/\n/g, '<br>'));
-    }
-
-    function cmdHelp() {
-      append('<span class="t-warn">사용 가능한 명령어:</span>');
-      append('  <span class="t-ok">whoami</span>         프로필 보기');
-      append('  <span class="t-ok">ls</span> [path]      현재/지정 경로 보기 (디렉터리/글/링크)');
-      append('  <span class="t-ok">cd</span> [path]      디렉터리 이동 (ls posts/ 후 cd posts/&lt;category&gt;)');
-      append('  <span class="t-ok">cat</span> &lt;slug&gt;      글 메타 정보 보기');
-      append('  <span class="t-ok">open</span> [-n] &lt;path|slug|glob|link&gt;  글/링크 열기 (-n: 새 탭, * 지원)');
-      append('  <span class="t-ok">pwd</span>            현재 경로');
-      append('  <span class="t-ok">tree</span> [path]    작은 디렉터리 트리 보기');
-      append('  <span class="t-ok">categories</span>     카테고리 전체 목록');
-      append('  <span class="t-ok">tags</span>           태그 전체 목록');
-      append('  <span class="t-ok">search</span> &lt;q&gt;    제목/설명/태그/슬러그 검색');
-      append('  <span class="t-ok">clear</span>          화면 지우기 (Ctrl+L)');
-      append('  <span class="t-ok">history</span>        명령어 이력');
-      append('  <span class="t-dim">단축키: ↑↓ 이력 · Tab 자동완성 · Ctrl+C 취소 · Ctrl+L 클리어</span>');
-      append('  <span class="t-dim">팁: 따옴표/백슬래시 경로, <span class="t-ok">cd -</span>, <span class="t-ok">./posts/테스트/테스트*</span> 지원</span>');
-    }
-
-    function cmdWhoami() {
-      append('<span class="t-user">주수민 (xmin)</span> <span class="t-dim">— 보안 · AI · 개발</span>');
-      append('<span class="t-dim">Baekseok Univ. · NGMS Security Lab · ZDI-25-1055</span>');
-      append('<span class="t-dim">blog:</span> <span class="t-ok">xmin.blog</span> <span class="t-dim">· portfolio:</span> <span class="t-ok">xmin.sh</span>');
-    }
-
-    function cmdCategories() {
-      const cats = Object.keys(postsDir).filter(k => !isMeta(k)).sort();
-      if (!cats.length) { append('<span class="t-dim">(비어 있음)</span>'); return; }
-      for (const c of cats) {
-        const count = Object.keys(postsDir[c]).filter(k => !isMeta(k)).length;
-        append(`  <span class="t-dir-name">${esc(c)}/</span> <span class="t-dim">(${count})</span>`);
-      }
-    }
-
-    function cmdTags() {
-      const counts = {};
-      for (const p of posts) for (const t of (p.tags || [])) counts[t] = (counts[t] || 0) + 1;
-      const keys = Object.keys(counts).sort();
-      if (!keys.length) { append('<span class="t-dim">(태그 없음)</span>'); return; }
-      append(keys.map(k => `<span class="tag">[${esc(k)}]</span> <span class="t-dim">×${counts[k]}</span>`).join('  '));
-    }
-
-    function cmdSearch(args) {
-      const q = args.trim().toLowerCase().normalize('NFKC');
-      const terms = q.split(/\s+/).filter(Boolean);
-      if (!terms.length) { append('<span class="t-error">search: 검색어 필요</span>'); return; }
-      const hits = posts.filter(p => {
-        const haystack = [p.title, p.description, p.category, p.slug, ...(p.tags || [])].join(' ').toLowerCase().normalize('NFKC');
-        return terms.every(term => haystack.includes(term));
-      });
-      if (!hits.length) { append('<span class="t-dim">일치하는 글 없음</span>'); return; }
-      for (const h of hits) {
-        const lock = h.is_private ? ' <span class="t-priv">🔒</span>' : '';
-        append(`  <span class="t-post-name">${esc(h.slug)}</span>${lock} <span class="t-dim">— ${esc(h.title)}</span>`);
-      }
-    }
-
-    function cmdHistory() {
-      if (!history.length) { append('<span class="t-dim">이력 없음</span>'); return; }
-      for (let i = 0; i < history.length; i++) {
-        append(`  <span class="t-dim">${i + 1}</span>  ${esc(history[i])}`);
-      }
-    }
-
-    function cmdClear() { out.innerHTML = ''; }
-
-    async function exec(raw) {
-      echoCmd(raw);
-      const parsed = splitCommandLine(raw);
-      const originalCmd = parsed.cmd;
-      const cmd = normalizeTerminalCommand(originalCmd.toLowerCase());
-      const args = parsed.args;
-      if (cmd !== originalCmd.toLowerCase()) append(`<span class="t-dim">↳ ${esc(cmd)} 로 해석</span>`);
-      switch (cmd) {
-        case 'help': case '?': cmdHelp(); break;
-        case 'whoami': cmdWhoami(); break;
-        case 'ls': case 'dir': cmdLs(args); break;
-        case 'll': cmdLs('-la ' + args); break;
-        case 'cd': cmdCd(args); break;
-        case 'pwd': cmdPwd(); break;
-        case 'tree': cmdTree(args); break;
-        case 'cat': case 'less': case 'more': cmdCat(args); break;
-        case 'open': case 'run': case 'exec': await cmdOpen(args); break;
-        case 'categories': case 'cats': cmdCategories(); break;
-        case 'tags': cmdTags(); break;
-        case 'search': case 'grep': case 'find': cmdSearch(args); break;
-        case 'history': cmdHistory(); break;
-        case 'clear': case 'cls': cmdClear(); break;
-        case 'date': append(new Date().toLocaleString('ko-KR')); break;
-        case 'echo': append(esc(args)); break;
-        case 'exit': case 'logout': append('<span class="t-dim">bye ✦</span>'); input.disabled = true; break;
-        default:
-          if (originalCmd.startsWith('./')) await cmdOpen(originalCmd.slice(2) + (args ? ' ' + args : ''));
-          else if (originalCmd.includes('/') || findPostMatches(originalCmd).length) await cmdOpen(originalCmd + (args ? ' ' + args : ''));
-          else append(`<span class="t-error">command not found: ${esc(originalCmd)}</span> <span class="t-dim">(help 입력)</span>`);
-      }
-    }
-
-    function autocomplete(val) {
-      const parts = val.split(/\s+/);
-      const builtins = ['help','whoami','ls','ll','cd','pwd','tree','cat','open','categories','tags','search','history','clear','date','echo','exit'];
-      if (parts.length <= 1) {
-        const partial = parts[0].toLowerCase();
-        const matches = builtins.filter(c => c.startsWith(partial));
-        if (matches.length === 1) return matches[0];
-        if (matches.length > 1) append('<span class="t-dim">' + matches.join('  ') + '</span>');
-        return val;
-      }
-      const cmd = parts[0].toLowerCase();
-      const partial = parts[parts.length - 1];
-      const lastSlash = partial.lastIndexOf('/');
-      const prefix = lastSlash >= 0 ? partial.slice(0, lastSlash + 1) : '';
-      const name = lastSlash >= 0 ? partial.slice(lastSlash + 1) : partial;
-      const lookupPath = resolvePath(prefix || '.');
-      const node = getNode(lookupPath);
-      if (!node || node._type !== 'dir') return val;
-      const { dirs, posts: postsArr, links } = lsDir(node);
-      let pool = [...dirs];
-      if (cmd === 'cat' || cmd === 'open' || cmd === 'run' || cmd === 'exec' || cmd === 'less' || cmd === 'more') pool = pool.concat(postsArr.map(p => p.k), links.map(l => `${l}@`));
-      if (cmd === 'ls') pool = pool.concat(postsArr.map(p => p.k), links.map(l => `${l}@`));
-      if (cmd === 'cd') { /* dirs only */ }
-      if (cmd !== 'ls' && cmd !== 'cd' && cmd !== 'cat' && cmd !== 'open' && cmd !== 'run' && cmd !== 'exec' && cmd !== 'less' && cmd !== 'more') {
-        pool = pool.concat(postsArr.map(p => p.k));
-      }
-      const matches = pool.filter(f => f.toLowerCase().startsWith(name.toLowerCase()));
-      if (matches.length === 1) {
-        parts[parts.length - 1] = prefix + matches[0];
-        return parts.join(' ');
-      }
-      if (matches.length > 1) append('<span class="t-dim">' + matches.join('  ') + '</span>');
-      return val;
-    }
-
-    // Input keydown
-    input.addEventListener('keydown', async (e) => {
-      if (pendingPw) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          const pw = input.value;
-          input.value = '';
-          if (!pw) return;
-          const { slug, newTab } = pendingPw;
-          append(`<span class="t-dim">[password] ••••••</span>`);
-          const ok = await verifyPostPassword(slug, pw);
-          if (ok && ok.content != null) {
-            sessionStorage.setItem(`post_pw_${slug}`, pw);
-            append(`<span class="t-ok">✓ 잠금 해제 — ${esc(slug)} 열기...</span>`);
-            pendingPw = null;
-            input.type = 'text'; input.placeholder = '';
-            updatePrompt();
-            dollarEl.textContent = '$';
-            setTimeout(() => navigate(slug, newTab), 250);
-          } else {
-            append('<span class="t-error">✗ 암호가 올바르지 않습니다.</span>');
-          }
-          return;
-        }
-        if ((e.ctrlKey && e.key === 'c') || e.key === 'Escape') {
-          e.preventDefault();
-          append('<span class="t-dim">취소됨</span>');
-          pendingPw = null;
-          input.type = 'text'; input.value = ''; input.placeholder = '';
-          updatePrompt();
-          dollarEl.textContent = '$';
-          return;
-        }
-        return;
-      }
-
-      if (e.ctrlKey && e.key.toLowerCase() === 'l') { e.preventDefault(); cmdClear(); return; }
-      if (e.ctrlKey && e.key.toLowerCase() === 'c') {
-        e.preventDefault();
-        echoCmd(input.value + '^C');
-        input.value = '';
-        return;
-      }
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        input.value = autocomplete(input.value);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (historyIdx < history.length - 1) { historyIdx++; input.value = history[history.length - 1 - historyIdx]; }
-        return;
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (historyIdx > 0) { historyIdx--; input.value = history[history.length - 1 - historyIdx]; }
-        else { historyIdx = -1; input.value = ''; }
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const raw = input.value.trim();
-        input.value = '';
-        if (!raw) return;
-        history.push(raw); historyIdx = -1;
-        await exec(raw);
-      }
-    });
-
-    body.addEventListener('click', () => {
-      const sel = window.getSelection();
-      if (!sel || sel.isCollapsed) input.focus();
-    });
-
-    // Welcome
-    append('<span class="t-ok">Welcome — xmin@blog</span>');
-    append(`<span class="t-dim">${posts.length} posts · 카테고리: ${Object.keys(postsDir).filter(k=>!isMeta(k)).sort().map(c=>`<span class="tag">${esc(c)}</span>`).join(' ')}</span>`);
-    append('<span class="t-dim">명령어 보기: <span class="t-ok">help</span>  ·  예: <span class="t-ok">ls posts/</span> → <span class="t-ok">cd posts/Linux</span> → <span class="t-ok">open &lt;slug&gt;</span></span>');
-    append('');
-    updatePrompt();
-  }
-
-  loadPosts();
+  load();
 </script>

@@ -1,38 +1,165 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro';
+import Layout from '../layouts/Layout.astro';
+
+const idRows: Array<[string, string, string?]> = [
+  ['name', '주수민 (Ju Sumin)', 'fg'],
+  ['role', 'AI Security Engineer'],
+  ['focus', 'fuzzing · binary · ai'],
+  ['edu', '백석대 정보보호학과 4th'],
+  ['pgp', '0xA1B2 C3D4', 'am'],
+  ['creed', '공격자 관점으로 생각하기'],
+];
+
+// Real box-drawing card rendered in D2Coding (Hangul = exactly 2 mono cells),
+// so columns padded by visual width line up — every │ ╭ ╮ ╰ ╯ ─ is a real glyph.
+const ID_INNER = 40; // visual columns between the two side pipes
+const wideRe = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/;
+function vlen(s: string): number {
+  let w = 0;
+  for (const ch of s) w += wideRe.test(ch) ? 2 : 1;
+  return w;
+}
+// line = "│ " + label(8) + "· " + value + pad + " │" → inner width must equal ID_INNER
+function idPad(value: string): number {
+  return Math.max(0, ID_INNER - 12 - vlen(value));
+}
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+const idLine = '─'.repeat(ID_INNER);
+let idCardHtml = `<span class="v11-dim">╭${idLine}╮</span>\n`;
+for (const [k, v, c] of idRows) {
+  const cls = c ? `v11-${c}` : '';
+  idCardHtml += `<span class="v11-dim">│ ${k.padEnd(8)}· </span>`
+    + `<span class="${cls}">${esc(v)}</span>${' '.repeat(idPad(v))}`
+    + `<span class="v11-dim"> │</span>\n`;
+}
+idCardHtml += `<span class="v11-dim">╰${idLine}╯</span>`;
+
+const timeline = [
+  ['2026', '벨루가 인턴 — RAG 챗봇 고도화', 'green'],
+  ['2025', 'ZDI-25-1055 제보 · NGMS 랩장 · WHS 3기', 'green'],
+  ['2024', 'HUB 16기 회장 · KCI 논문 투고', 'subtle'],
+  ['2023', '정보보호 본격 시작', 'subtle'],
+];
 ---
 
-<BaseLayout title="소개 — xmin.blog" description="주수민 - 보안 연구원 & AI 엔지니어">
-  <section class="mx-auto max-w-6xl px-5 py-8">
-    <div class="max-w-2xl">
-    <h1 class="text-4xl font-bold tracking-tight mb-3" style="font-family: var(--font-display);">
-      About
-    </h1>
-    <p class="text-lg text-[var(--color-text-secondary)] mb-12">
-      보안 취약점을 찾고, AI로 더 안전한 시스템을 만듭니다.
-    </p>
+<Layout title="소개 — xmin.blog" description="주수민 - AI Security Engineer · ZDI-25-1055" active={3} path="about" maxWidth={960}>
+  <div class="v11-about-grid" style="padding-top:34px;padding-bottom:34px;">
+    <div>
+      <div class="v11-dim" style="font-size:12px;margin-bottom:6px;"><span class="v11-gr">$</span> whoami --verbose</div>
+      <pre class="v11-idcard" set:html={idCardHtml}></pre>
 
-    <div class="prose prose-lg max-w-none">
-      <h2>주수민 (xmin)</h2>
-      <p>
-        보안과 AI를 연구하는 개발자입니다.
-        Windows 퍼징을 통한 제로데이 취약점 발견(ZDI-25-1055)부터
-        AI 기반 보안 시스템 개발까지, 안전한 소프트웨어를 만들기 위해 노력하고 있습니다.
+      <p class="v11-sans" style="font-size:15.5px;color:var(--color-text);line-height:1.85;margin:0;">
+        공격자 관점의 보안 리서치를 지향합니다. <strong style="color:var(--color-fg);">퍼징·바이너리 분석</strong>에 집중하며,
+        AI 와 함께 더 안전한 시스템을 만드는 일을 하고 싶습니다. 처음 접한 주제도 도전적으로 파고듭니다.<span class="v11-cursor"></span>
+      </p>
+      <p class="v11-sans" style="font-size:14.5px;color:var(--color-subtle);line-height:1.85;">
+        포트폴리오는 <a href="https://xmin.sh" target="_blank" rel="noopener">xmin.sh</a>, 랜딩은
+        <a href="https://xmin.io" target="_blank" rel="noopener">xmin.io</a>. 이 블로그는 RSS 권장.
       </p>
 
-      <h3>주요 관심사</h3>
-      <ul>
-        <li><strong>보안</strong> — Fuzzing, 0-Day Research, 침투 테스트</li>
-        <li><strong>AI</strong> — NLP, Deep Learning, LLM, RAG</li>
-        <li><strong>개발</strong> — Python, TypeScript, React, Systems Programming</li>
-      </ul>
+      <h3 class="v11-about-h3">// $ cat skills</h3>
+      <pre class="v11-skills"><span class="v11-dim">{`  security`}</span>{`  `}<span class="v11-rd">Fuzzing</span>{` · `}<span class="v11-rd">0-Day</span>{` · WinAFL · syzkaller
+`}<span class="v11-dim">{`          `}</span>{`  binary analysis · Pentera · SentinelOne
+`}<span class="v11-dim">{`  ai      `}</span>{`  `}<span class="v11-pu">RAG</span>{` · `}<span class="v11-pu">LLM</span>{` · KcBERT · deep-learning ensemble
+`}<span class="v11-dim">{`  dev     `}</span>{`  `}<span class="v11-cy">Python</span>{` · `}<span class="v11-cy">TypeScript</span>{` · React · Flask · Node`}</pre>
 
-      <h3>링크</h3>
-      <ul>
-        <li><a href="https://xmin.sh" target="_blank" rel="noopener">포트폴리오</a></li>
-        <li><a href="https://github.com/xmin-02" target="_blank" rel="noopener">GitHub</a></li>
-      </ul>
+      <h3 class="v11-about-h3">// timeline · $ git log</h3>
+      <div class="v11-timeline">
+        <div class="v11-timeline-line"></div>
+        {timeline.map(([y, t, c]) => (
+          <div class="v11-timeline-item">
+            <span class="v11-timeline-node" style={`background:${c === 'green' ? 'var(--color-green)' : 'var(--color-subtle)'};`}></span>
+            <span class="v11-dim" style="font-size:11px;display:inline-block;width:42px;">{y}</span>
+            <span class="v11-sans" style="font-size:14px;">{t}</span>
+          </div>
+        ))}
+      </div>
+
+      <h3 class="v11-about-h3">// $ disclosures --list</h3>
+      <div style="font-size:12.5px;line-height:1.95;margin-top:6px;">
+        <div><span class="lvl lvl-cve">ZDI</span> <span class="v11-rd">ZDI-25-1055</span> · Windows MP4 NPD DoS · <span class="v11-dim">public</span></div>
+        <div><span class="lvl lvl-warn">WARN</span> <span class="v11-am">2 advisories</span> · <span class="v11-dim">embargo</span></div>
+      </div>
     </div>
-    </div>
-  </section>
-</BaseLayout>
+
+    <aside>
+      <div class="v11-side-box">
+        <div class="v11-dim v11-side-title">// $ contact</div>
+        <div style="font-size:12.5px;line-height:2;">
+          <div><span class="v11-dim v11-w54">mail</span> <a href="mailto:x@xmin.sh">x@xmin.sh</a></div>
+          <div><span class="v11-dim v11-w54">github</span> <a href="https://github.com/xmin-02" target="_blank" rel="noopener">@xmin-02</a></div>
+          <div><span class="v11-dim v11-w54">portf</span> <a href="https://xmin.sh" target="_blank" rel="noopener">xmin.sh</a></div>
+          <div><span class="v11-dim v11-w54">rss</span> <a href="/rss.xml">/rss.xml</a></div>
+        </div>
+      </div>
+      <div class="v11-side-box">
+        <div class="v11-dim v11-side-title">// $ stats</div>
+        <div style="font-size:12.5px;line-height:1.95;">
+          <div><span class="v11-dim v11-w64">0-day</span> <span class="v11-rd">1</span> (ZDI)</div>
+          <div><span class="v11-dim v11-w64">논문</span> <span class="v11-fg">10</span></div>
+          <div><span class="v11-dim v11-w64">수상</span> <span class="v11-fg">10</span></div>
+          <div><span class="v11-dim v11-w64">프로젝트</span> <span class="v11-fg">11</span></div>
+        </div>
+      </div>
+      <div class="v11-side-box">
+        <div class="v11-dim v11-side-title">// $ ssh-keygen -lvf</div>
+        <pre class="v11-gr" style="margin:0;font-size:9.5px;line-height:1.25;">{`+---[ED25519 256]--+
+|      . o.=BX*o  |
+|     . o +oB+O . |
+|    . + + .+ *.  |
+|     = + o.. o   |
+|    o o S +      |
+|   . . . . .     |
+|     o + o       |
+|      E =        |
++----[SHA256]-----+`}</pre>
+      </div>
+      <div class="v11-side-box" style="font-size:11px;color:var(--color-subtle);line-height:1.7;">
+        <div class="v11-dim" style="font-size:10.5px;letter-spacing:0.06em;margin-bottom:6px;">// colophon</div>
+        Astro · Cloudflare · <span class="v11-gr">no ads</span> · <span class="v11-gr">no trackers</span> · <span class="v11-gr">no AI text</span>.
+      </div>
+    </aside>
+  </div>
+</Layout>
+
+<style>
+  .v11-about-grid { display: grid; grid-template-columns: 1fr 300px; gap: 48px; }
+
+  /* identity card: D2Coding (2-cell Hangul) → box-drawing aligns by char count */
+  .v11-idcard {
+    margin: 4px 0 18px;
+    font-family: 'D2Coding', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--color-text);
+    white-space: pre;
+    overflow-x: auto;
+    display: inline-block;
+    max-width: 100%;
+  }
+  .v11-skills {
+    font-size: 12.5px; line-height: 1.95; margin: 8px 0 0;
+    color: var(--color-text); font-family: var(--font-mono);
+    white-space: pre; overflow-x: auto;
+  }
+  .v11-about-h3 {
+    font-size: 13px; color: var(--color-subtle); margin-top: 30px;
+    letter-spacing: 0.04em; font-weight: 500; font-family: var(--font-mono);
+  }
+  .v11-timeline { position: relative; padding-left: 22px; margin-top: 12px; }
+  .v11-timeline-line { position: absolute; left: 4px; top: 6px; bottom: 6px; width: 1px; background: var(--color-border); }
+  .v11-timeline-item { position: relative; padding: 5px 0 9px; }
+  .v11-timeline-node {
+    position: absolute; left: -22px; top: 9px; width: 9px; height: 9px;
+    border-radius: 50%; box-shadow: 0 0 0 3px var(--color-bg);
+  }
+  .v11-side-box { border: 1px solid var(--color-border); padding: 14px 16px; margin-bottom: 12px; }
+  .v11-side-title { font-size: 11px; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .v11-w54 { display: inline-block; width: 54px; }
+  .v11-w64 { display: inline-block; width: 64px; }
+  @media (max-width: 720px) {
+    .v11-about-grid { grid-template-columns: 1fr; gap: 28px; }
+  }
+</style>

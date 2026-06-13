@@ -1,0 +1,34 @@
+---
+interface Props {
+  postCount?: number;
+  areas?: string;
+  disclosures?: string;
+  uptimeDays?: string;
+}
+const {
+  postCount = 47,
+  areas = 'security · ai · dev',
+  disclosures = 'ZDI-25-1055 · +2 embargo',
+  uptimeDays = '8,607d',
+} = Astro.props;
+---
+<pre class="v11-bootlog" data-postcount-label>
+<span class="v11-dim">{`┌ xmin.blog.systemboot.log ┐`}</span>
+<span class="lvl lvl-ok">{` OK `}</span>{`  Reached target `}<span class="v11-fg">xmin.blog</span>{` — writings channel.`}
+<span class="lvl lvl-ok">{` OK `}</span>{`  Mounted /posts `}<span class="v11-dim" data-mount-posts>{`(${postCount} entries · ${areas})`}</span>
+<span class="lvl lvl-ok">{` OK `}</span>{`  Mounted /disclosures `}<span class="v11-dim">{`(${disclosures})`}</span>
+<span class="lvl lvl-ok">{` OK `}</span>{`  Started rss.service `}<span class="v11-dim">{`→ /rss.xml`}</span>
+<span class="v11-dim">{`└ login: guest · uptime ${uptimeDays} ┘`}</span>
+</pre>
+
+<style>
+  .v11-bootlog {
+    margin: 0 0 6px;
+    font-size: 11.5px;
+    line-height: 1.85;
+    color: var(--color-subtle);
+    font-family: var(--font-mono);
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+</style>

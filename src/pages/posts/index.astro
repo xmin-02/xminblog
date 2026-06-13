@@ -1,0 +1,132 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="글 목록 — xmin.blog" description="xmin.blog 전체 글 목록" active={1} path="posts" maxWidth={1000}>
+  <div style="padding-top:26px;padding-bottom:30px;">
+    <div class="v11-list-head" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;font-family:var(--font-mono);">
+      <span class="v11-dim" style="font-size:12.5px;"><span class="v11-gr">$</span> ls -lth --thumbnails posts/</span>
+      <span class="v11-dim" style="font-size:11.5px;">view: <span class="v11-gr">[list]</span> · <a href="/tags">tags</a></span>
+    </div>
+    <div id="posts-list">
+      <div class="v11-dim" style="font-size:12.5px;padding:14px 8px;">posts 불러오는 중…<span class="v11-cursor"></span></div>
+    </div>
+  </div>
+</Layout>
+
+<style is:global>
+  .v11-post-item {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 16px 8px;
+    border-bottom: 1px solid var(--color-border);
+    color: inherit;
+  }
+  .v11-post-item:hover { text-decoration: none; }
+  .v11-post-item:hover .pi-title { color: var(--color-green-br); }
+  .pi-body { flex: 1 1 auto; min-width: 0; }
+  .pi-title {
+    font-family: var(--font-sans);
+    font-size: 16px; font-weight: 600;
+    color: var(--color-fg);
+    margin-bottom: 6px;
+    line-height: 1.35;
+  }
+  .pi-desc {
+    font-family: var(--font-sans);
+    font-size: 13.5px; color: var(--color-subtle);
+    line-height: 1.6;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    margin-bottom: 9px;
+  }
+  .pi-meta {
+    font-family: var(--font-mono);
+    font-size: 11.5px; color: var(--color-dim);
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  }
+  .pi-thumb {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 150px; height: 96px;
+    overflow: hidden;
+    border: 1px solid var(--color-border-d);
+    border-radius: 2px;
+    background: var(--color-panel);
+  }
+  .pi-thumb img { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.9); transition: filter 0.2s; }
+  .v11-post-item:hover .pi-thumb img { filter: brightness(1); }
+  @media (max-width: 600px) {
+    .v11-post-item { gap: 16px; }
+    .pi-thumb { width: 96px; height: 70px; }
+  }
+</style>
+
+<script>
+  import { areaForPost as areaFor } from '../../lib/area';
+
+  const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+  function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function postUrl(slug){return `/post/?slug=${encodeURIComponent(slug)}`;}
+  function fmtDate(d){try{return new Date(d).toISOString().slice(0,10);}catch{return'';}}
+
+  // representative image: explicit cover, else the post's first body image (derived async)
+  function thumbOf(p){ return p.cover || p._thumb || ''; }
+
+  function render(posts){
+    const list=document.getElementById('posts-list');
+    if(!posts.length){list.innerHTML='<div class="v11-dim" style="font-size:12.5px;padding:14px 8px;">글이 없습니다.</div>';return;}
+    list.innerHTML=posts.map(p=>{
+      const a=areaFor(p);
+      const cover=thumbOf(p);
+      const tags=(p.tags||[]).slice(0,3).map(t=>`<span class="v11-tag ${a}">#${esc(t)}</span>`).join('');
+      const thumb=cover
+        ? `<div class="pi-thumb"><img src="${esc(cover)}" alt="${esc(p.coverAlt||p.title)}" loading="lazy" decoding="async"/></div>`
+        : '';
+      const priv=p.is_private?'<span class="lvl lvl-warn" style="font-size:10px;">priv</span>':'';
+      return `<a href="${postUrl(p.slug)}" class="v11-post-item" data-slug="${esc(p.slug)}">
+        <div class="pi-body">
+          <div class="pi-title">${esc(p.title)}${priv}</div>
+          ${p.description?`<div class="pi-desc">${esc(p.description)}</div>`:''}
+          <div class="pi-meta"><span class="v11-dim">${esc(fmtDate(p.date))}</span>${tags}</div>
+        </div>
+        ${thumb}
+      </a>`;
+    }).join('');
+  }
+
+  const IMG_RE=/!\[[^\]]*\]\((https?:\/\/[^)\s"']+)/;
+  async function deriveThumbs(posts){
+    const need=posts.filter(p=>!p.cover);
+    let changed=false;
+    await Promise.all(need.map(async (p)=>{
+      const key='thumb_'+p.slug;
+      let url=sessionStorage.getItem(key);
+      if(url===null){
+        try{
+          const r=await fetch(`${API_BASE}/api/posts/${encodeURIComponent(p.slug)}`);
+          if(r.ok){ const d=await r.json(); const m=String(d.content||'').match(IMG_RE); url=m?m[1]:''; }
+          else url='';
+        }catch{ url=''; }
+        try{ sessionStorage.setItem(key, url); }catch{}
+      }
+      if(url){ p._thumb=url; changed=true; }
+    }));
+    return changed;
+  }
+
+  async function load(){
+    try{
+      const res=await fetch(`${API_BASE}/api/posts`);
+      if(!res.ok) throw new Error('api');
+      const data=await res.json();
+      const posts=data.filter(p=>!p.draft&&!p.is_private).sort((a,b)=>new Date(b.date)-new Date(a.date));
+      render(posts);
+      if(await deriveThumbs(posts)) render(posts); // re-render once derived thumbnails are known
+    }catch(e){
+      document.getElementById('posts-list').innerHTML='<div class="v11-rd" style="font-size:12.5px;padding:14px 8px;">posts를 불러오지 못했습니다.</div>';
+    }
+  }
+  load();
+</script>

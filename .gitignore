@@ -34,3 +34,6 @@ blog-api/data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Local design reference bundle (not part of the site)
+design_handoff_xmin_blog_v11/

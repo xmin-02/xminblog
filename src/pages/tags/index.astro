@@ -1,0 +1,128 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="태그 — xmin.blog" description="xmin.blog 태그 색인" active={2} path="tags/all" maxWidth={960}>
+  <div style="padding-top:30px;padding-bottom:30px;">
+    <div class="v11-dim" style="font-size:12px;"><span class="v11-gr">$</span> grep -rln <span class="v11-am">"#"</span> posts/ | sort -r</div>
+    <h1 class="v11-sans" style="margin:8px 0 4px;font-size:30px;color:var(--color-fg);"><span class="v11-gr">#</span>tags</h1>
+    <div class="v11-dim" id="tags-summary" style="font-size:12.5px;margin-bottom:20px;">불러오는 중…</div>
+
+    <div style="border:1px solid var(--color-border);padding:12px 16px;font-size:12px;line-height:2;">
+      <div class="v11-dim" style="margin-bottom:6px;"><span class="v11-gr">$</span> ls -la tags/ <span class="v11-dim">// size = posts · color = 영역</span></div>
+      <div id="tags-ls"><span class="v11-dim">…</span></div>
+    </div>
+
+    <div id="year-groups" style="margin-top:24px;"></div>
+
+    <div class="v11-dim" style="font-size:12px;margin-top:24px;padding-top:14px;border-top:1px solid var(--color-border);display:flex;justify-content:space-between;">
+      <span><span class="v11-gr">$</span> echo "EOF"<span class="v11-cursor"></span></span>
+      <span><a href="/posts">archive</a></span>
+    </div>
+  </div>
+</Layout>
+
+<style is:global>
+  .v11-tag-row {
+    display: grid;
+    grid-template-columns: 120px 26px 1fr 70px;
+    gap: 8px;
+    color: var(--color-text);
+  }
+  .v11-tag-row.is-active { color: var(--color-fg); background: var(--color-panel); padding: 0 6px; margin-left: -6px; }
+  .v11-year-head {
+    display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; font-size: 13px;
+  }
+  .v11-year-rule { flex: 1; height: 1px; background: var(--color-border); }
+  .v11-cat-row {
+    display: grid;
+    grid-template-columns: 66px 54px 1fr 50px 60px;
+    gap: 14px;
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--color-border);
+    color: inherit;
+    align-items: baseline;
+  }
+  .v11-cat-row:hover { text-decoration: none; }
+  .v11-cat-row:hover .v11-cat-title { color: var(--color-green-br); }
+  .v11-cat-title { color: var(--color-fg); font-family: var(--font-sans); font-size: 14px; }
+  @media (max-width: 720px) {
+    .v11-tag-row { grid-template-columns: 1fr 60px; }
+    .v11-tag-row .v11-perm, .v11-tag-row .v11-areacol { display: none; }
+    .v11-cat-row { grid-template-columns: 56px 1fr 54px; }
+    .v11-cat-row .v11-cat-area, .v11-cat-row .v11-cat-like { display: none; }
+  }
+</style>
+
+<script>
+  import { areaForText as areaOf, areaForPost as areaFor, areaLabel } from '../../lib/area';
+
+  const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+  function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function postUrl(slug){return `/post/?slug=${encodeURIComponent(slug)}`;}
+  function fmtMD(d){try{return new Date(d).toISOString().slice(5,10);}catch{return'';}}
+  function readTime(p){const n=((p.title||'').length+(p.description||'').length)*6+600;return Math.max(3,Math.round(n/350))+'m';}
+  function likesOf(p){return p.likes ?? p.like_count ?? p.likes_count ?? 0;}
+
+  let allPosts=[];
+  let activeTag=new URLSearchParams(location.search).get('tag')||null;
+
+  function buildTagList(){
+    const counts={};
+    for(const p of allPosts) for(const t of (p.tags||[])) counts[t]=(counts[t]||0)+1;
+    const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+    const ls=document.getElementById('tags-ls');
+    ls.innerHTML=entries.map(([t,n])=>{
+      const a=areaOf(t)|| (allPosts.find(p=>(p.tags||[]).includes(t))? areaFor(allPosts.find(p=>(p.tags||[]).includes(t))):'');
+      const on=activeTag===t;
+      return `<a href="?tag=${encodeURIComponent(t)}" class="v11-tag-row${on?' is-active':''}" style="text-decoration:none;">
+        <span class="v11-perm v11-dim">drwxr-xr-x</span>
+        <span style="text-align:right;">${n}</span>
+        <span><span class="v11-tag ${a}" style="font-weight:${on?600:400};">#${esc(t)}/</span></span>
+        <span class="v11-areacol v11-dim" style="text-align:right;font-size:10.5px;">${areaLabel(a)}</span>
+      </a>`;
+    }).join('');
+    document.getElementById('tags-summary').innerHTML =
+      `${allPosts.length} entries · ${entries.length} tags${activeTag?` · 필터 <span class="v11-gr">#${esc(activeTag)}</span> <a href="/tags">[clear]</a>`:''}`;
+  }
+
+  function buildYears(){
+    const posts=activeTag?allPosts.filter(p=>(p.tags||[]).includes(activeTag)):allPosts;
+    const byYear={};
+    for(const p of posts){const y=(p.date?new Date(p.date).getFullYear():'—');(byYear[y]=byYear[y]||[]).push(p);}
+    const years=Object.keys(byYear).sort((a,b)=>b-a);
+    const root=document.getElementById('year-groups');
+    if(!posts.length){root.innerHTML='<div class="v11-dim" style="font-size:12.5px;padding:16px 0;">해당하는 글이 없습니다.</div>';return;}
+    root.innerHTML=years.map(yr=>{
+      const items=byYear[yr].sort((a,b)=>new Date(b.date)-new Date(a.date));
+      const rows=items.map(p=>{
+        const a=areaFor(p);
+        return `<a href="${postUrl(p.slug)}" class="v11-cat-row">
+          <span class="v11-dim" style="font-size:12px;">${esc(fmtMD(p.date))}</span>
+          <span class="v11-cat-area v11-tag ${a}" style="font-size:10.5px;">#${a||'meta'}</span>
+          <span class="v11-cat-title">${esc(p.title)}</span>
+          <span class="v11-dim" style="font-size:11.5px;text-align:right;">${readTime(p)}</span>
+          <span class="v11-cat-like v11-gr" style="font-size:11px;text-align:right;">♡ ${likesOf(p)}</span>
+        </a>`;
+      }).join('');
+      return `<div style="margin-top:24px;">
+        <div class="v11-year-head"><span class="v11-gr">▸</span><span class="v11-fg" style="font-size:17px;font-weight:700;">${yr}/</span><span class="v11-year-rule"></span><span class="v11-dim">${items.length} entries</span></div>
+        ${rows}
+      </div>`;
+    }).join('');
+  }
+
+  async function load(){
+    try{
+      const res=await fetch(`${API_BASE}/api/posts`);
+      if(!res.ok) throw new Error('api');
+      const data=await res.json();
+      allPosts=data.filter(p=>!p.draft&&!p.is_private);
+      buildTagList();
+      buildYears();
+    }catch(e){
+      document.getElementById('tags-summary').innerHTML='<span class="v11-rd">태그를 불러오지 못했습니다.</span>';
+    }
+  }
+  load();
+</script>
