@@ -21,6 +21,9 @@
  *   POST   /api/auth/login      — login, returns JWT
  *   GET    /api/auth/me         — get current user (Bearer token)
  *   POST   /api/auth/avatar     — upload profile image (auth required)
+ *   GET    /api/auth/push-token — list current user's registered push devices
+ *   PUT    /api/auth/push-token — register/update APNs token + notification prefs
+ *   DELETE /api/auth/push-token — disable one/all current user's push devices
  *   GET    /api/auth/my-likes   — list posts liked by current user
  *
  * Comment routes:
@@ -564,6 +567,250 @@ async function ensureAdminUserId(env: Env): Promise<number> {
 
 async function getDbUserIdForAuth(user: JWTPayload, env: Env): Promise<number> {
   return user.sub === 0 ? ensureAdminUserId(env) : user.sub;
+}
+
+// ─── Push notification preferences ───────────────────────────────────────────
+
+type PushPlatform = 'ios';
+type PushEnvironment = 'sandbox' | 'production';
+
+const PUSH_NOTIFICATION_EVENTS = [
+  'reviewCreated',
+  'cveDraftCreated',
+  'securityNewsDraftCreated',
+  'publishCompleted',
+  'publishFailed',
+  'commentCreated',
+  'likeCreated',
+  'automationFailed',
+  'dailyDigest',
+  'weeklyDigest',
+] as const;
+
+const PUSH_NOTIFICATION_EVENT_SET = new Set<string>(PUSH_NOTIFICATION_EVENTS);
+const DEFAULT_PUSH_NOTIFICATION_EVENTS: Record<string, boolean> = Object.fromEntries(
+  PUSH_NOTIFICATION_EVENTS.map(event => [event, event !== 'weeklyDigest']),
+);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function cleanPushToken(value: unknown): string {
+  const token = String(value ?? '').replace(/\s+/g, '').toLowerCase();
+  if (!/^[a-f0-9]{64,200}$/.test(token)) {
+    throw new Error('Invalid APNs token');
+  }
+  return token;
+}
+
+function cleanPushPlatform(value: unknown): PushPlatform {
+  const platform = String(value ?? 'ios').trim().toLowerCase();
+  if (platform !== 'ios') throw new Error('Unsupported push platform');
+  return platform;
+}
+
+function cleanPushEnvironment(value: unknown): PushEnvironment {
+  const environment = String(value ?? 'production').trim().toLowerCase();
+  if (environment !== 'sandbox' && environment !== 'production') {
+    throw new Error('Unsupported push environment');
+  }
+  return environment;
+}
+
+function cleanPushText(value: unknown, max: number): string {
+  return String(value ?? '').trim().slice(0, max);
+}
+
+function cleanClockTime(value: unknown, fallback: string): string {
+  const time = String(value ?? fallback).trim();
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    throw new Error('Notification times must use HH:mm format');
+  }
+  return time;
+}
+
+function cleanPushEvents(value: unknown): Record<string, boolean> {
+  const events = { ...DEFAULT_PUSH_NOTIFICATION_EVENTS };
+  if (!isRecord(value)) return events;
+  for (const [event, enabled] of Object.entries(value)) {
+    if (PUSH_NOTIFICATION_EVENT_SET.has(event) && typeof enabled === 'boolean') {
+      events[event] = enabled;
+    }
+  }
+  return events;
+}
+
+function parsePushEvents(value: unknown): Record<string, boolean> {
+  if (typeof value !== 'string' || !value) return { ...DEFAULT_PUSH_NOTIFICATION_EVENTS };
+  try {
+    return cleanPushEvents(JSON.parse(value));
+  } catch {
+    return { ...DEFAULT_PUSH_NOTIFICATION_EVENTS };
+  }
+}
+
+function pushSubscriptionResponse(row: any) {
+  return {
+    id: Number(row.id),
+    platform: row.platform,
+    environment: row.environment,
+    bundle_id: row.bundle_id ?? '',
+    enabled: dbBool(row.enabled),
+    events: parsePushEvents(row.events),
+    include_sensitive_preview: dbBool(row.include_sensitive_preview),
+    quiet_hours_enabled: dbBool(row.quiet_hours_enabled),
+    quiet_hours_start: row.quiet_hours_start ?? '22:00',
+    quiet_hours_end: row.quiet_hours_end ?? '08:00',
+    digest_time: row.digest_time ?? '09:00',
+    locale: row.locale ?? '',
+    timezone: row.timezone ?? '',
+    app_version: row.app_version ?? '',
+    device_name: row.device_name ?? '',
+    token_tail: String(row.token ?? '').slice(-8),
+    updated_at: row.updated_at ?? null,
+    last_seen_at: row.last_seen_at ?? null,
+  };
+}
+
+async function listPushSubscriptions(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const user = await getAuthUser(request, env);
+  if (!user) return json({ error: 'Unauthorized' }, 401, origin);
+
+  const userId = await getDbUserIdForAuth(user, env);
+  const rows = await env.DB.prepare(`
+    SELECT id, platform, token, environment, bundle_id, enabled, events,
+      include_sensitive_preview, quiet_hours_enabled, quiet_hours_start, quiet_hours_end,
+      digest_time, locale, timezone, app_version, device_name, updated_at, last_seen_at
+    FROM push_subscriptions
+    WHERE user_id = ?
+    ORDER BY updated_at DESC
+    LIMIT 20
+  `).bind(userId).all<any>();
+
+  return json((rows.results ?? []).map(pushSubscriptionResponse), 200, origin);
+}
+
+async function upsertPushSubscription(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const user = await getAuthUser(request, env);
+  if (!user) return json({ error: 'Unauthorized' }, 401, origin);
+
+  let body: Record<string, unknown>;
+  try { body = await request.json() as Record<string, unknown>; } catch { return json({ error: 'Invalid JSON' }, 400, origin); }
+
+  let token: string;
+  let platform: PushPlatform;
+  let environment: PushEnvironment;
+  let quietHoursStart: string;
+  let quietHoursEnd: string;
+  let digestTime: string;
+  try {
+    token = cleanPushToken(body.token);
+    platform = cleanPushPlatform(body.platform);
+    environment = cleanPushEnvironment(body.environment);
+    quietHoursStart = cleanClockTime(body.quiet_hours_start, '22:00');
+    quietHoursEnd = cleanClockTime(body.quiet_hours_end, '08:00');
+    digestTime = cleanClockTime(body.digest_time, '09:00');
+  } catch (err) {
+    return json({ error: (err as Error).message }, 400, origin);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const userId = await getDbUserIdForAuth(user, env);
+  const tokenHash = await sha256hex(token);
+  const events = JSON.stringify(cleanPushEvents(body.events));
+  const enabled = typeof body.enabled === 'boolean' ? body.enabled : true;
+  const includeSensitivePreview = typeof body.include_sensitive_preview === 'boolean' ? body.include_sensitive_preview : false;
+  const quietHoursEnabled = typeof body.quiet_hours_enabled === 'boolean' ? body.quiet_hours_enabled : true;
+
+  const row = await env.DB.prepare(`
+    INSERT INTO push_subscriptions (
+      user_id, platform, token, token_hash, environment, bundle_id, enabled, events,
+      include_sensitive_preview, quiet_hours_enabled, quiet_hours_start, quiet_hours_end,
+      digest_time, locale, timezone, app_version, device_name, created_at, updated_at, last_seen_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(token_hash) DO UPDATE SET
+      user_id = excluded.user_id,
+      platform = excluded.platform,
+      token = excluded.token,
+      environment = excluded.environment,
+      bundle_id = excluded.bundle_id,
+      enabled = excluded.enabled,
+      events = excluded.events,
+      include_sensitive_preview = excluded.include_sensitive_preview,
+      quiet_hours_enabled = excluded.quiet_hours_enabled,
+      quiet_hours_start = excluded.quiet_hours_start,
+      quiet_hours_end = excluded.quiet_hours_end,
+      digest_time = excluded.digest_time,
+      locale = excluded.locale,
+      timezone = excluded.timezone,
+      app_version = excluded.app_version,
+      device_name = excluded.device_name,
+      updated_at = excluded.updated_at,
+      last_seen_at = excluded.last_seen_at,
+      disabled_at = CASE WHEN excluded.enabled THEN NULL ELSE excluded.updated_at END
+    RETURNING id, platform, token, environment, bundle_id, enabled, events,
+      include_sensitive_preview, quiet_hours_enabled, quiet_hours_start, quiet_hours_end,
+      digest_time, locale, timezone, app_version, device_name, updated_at, last_seen_at
+  `).bind(
+    userId,
+    platform,
+    token,
+    tokenHash,
+    environment,
+    cleanPushText(body.bundle_id, 120),
+    enabled,
+    events,
+    includeSensitivePreview,
+    quietHoursEnabled,
+    quietHoursStart,
+    quietHoursEnd,
+    digestTime,
+    cleanPushText(body.locale, 40),
+    cleanPushText(body.timezone, 80),
+    cleanPushText(body.app_version, 40),
+    cleanPushText(body.device_name, 120),
+    now,
+    now,
+    now,
+  ).first<any>();
+
+  if (!row) return json({ error: 'Failed to register push token' }, 500, origin);
+  return json(pushSubscriptionResponse(row), 201, origin);
+}
+
+async function disablePushSubscription(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const user = await getAuthUser(request, env);
+  if (!user) return json({ error: 'Unauthorized' }, 401, origin);
+
+  let body: Record<string, unknown> = {};
+  try { body = await request.json() as Record<string, unknown>; } catch { /* empty body disables all current-user devices */ }
+
+  const now = Math.floor(Date.now() / 1000);
+  const userId = await getDbUserIdForAuth(user, env);
+  let result: D1Result;
+  if (body.token) {
+    let tokenHash: string;
+    try {
+      tokenHash = await sha256hex(cleanPushToken(body.token));
+    } catch (err) {
+      return json({ error: (err as Error).message }, 400, origin);
+    }
+    result = await env.DB.prepare(`
+      UPDATE push_subscriptions
+      SET enabled = ?, disabled_at = ?, updated_at = ?
+      WHERE user_id = ? AND token_hash = ?
+    `).bind(false, now, now, userId, tokenHash).run();
+  } else {
+    result = await env.DB.prepare(`
+      UPDATE push_subscriptions
+      SET enabled = ?, disabled_at = ?, updated_at = ?
+      WHERE user_id = ?
+    `).bind(false, now, now, userId).run();
+  }
+
+  return json({ disabled: result.meta?.changes ?? 0 }, 200, origin);
 }
 
 // ─── Auth handlers ────────────────────────────────────────────────────────────
@@ -1616,6 +1863,12 @@ export default {
       const limited = rateLimit(request, 'avatar', 20, 60 * 10, origin);
       if (limited) return limited;
       return uploadAvatar(request, env, origin);
+    }
+    if (url.pathname === '/api/auth/push-token') {
+      if (method === 'GET') return listPushSubscriptions(request, env, origin);
+      if (method === 'PUT' || method === 'POST') return upsertPushSubscription(request, env, origin);
+      if (method === 'DELETE') return disablePushSubscription(request, env, origin);
+      return json({ error: 'Method not allowed' }, 405, origin);
     }
     if (url.pathname === '/api/auth/change-password' && method === 'POST') {
       return changePassword(request, env, origin);

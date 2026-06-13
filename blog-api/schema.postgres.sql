@@ -42,6 +42,34 @@ CREATE TABLE IF NOT EXISTS page_views (
 CREATE INDEX IF NOT EXISTS idx_page_views_slug ON page_views(post_slug);
 CREATE INDEX IF NOT EXISTS idx_page_views_viewer ON page_views(post_slug, viewer_id, created_at);
 
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL DEFAULT 'ios',
+  token TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  environment TEXT NOT NULL DEFAULT 'production',
+  bundle_id TEXT NOT NULL DEFAULT '',
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  events TEXT NOT NULL DEFAULT '{}',
+  include_sensitive_preview BOOLEAN NOT NULL DEFAULT false,
+  quiet_hours_enabled BOOLEAN NOT NULL DEFAULT true,
+  quiet_hours_start TEXT NOT NULL DEFAULT '22:00',
+  quiet_hours_end TEXT NOT NULL DEFAULT '08:00',
+  digest_time TEXT NOT NULL DEFAULT '09:00',
+  locale TEXT NOT NULL DEFAULT '',
+  timezone TEXT NOT NULL DEFAULT '',
+  app_version TEXT NOT NULL DEFAULT '',
+  device_name TEXT NOT NULL DEFAULT '',
+  created_at BIGINT NOT NULL DEFAULT (extract(epoch from now())::bigint),
+  updated_at BIGINT NOT NULL DEFAULT (extract(epoch from now())::bigint),
+  last_seen_at BIGINT NOT NULL DEFAULT (extract(epoch from now())::bigint),
+  disabled_at BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id, enabled, updated_at);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_events ON push_subscriptions(enabled, platform, environment);
+
 CREATE TABLE IF NOT EXISTS posts (
   slug TEXT PRIMARY KEY,
   title TEXT NOT NULL,
