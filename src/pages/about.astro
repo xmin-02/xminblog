@@ -1,12 +1,12 @@
 ---
 import Layout from '../layouts/Layout.astro';
 
-const idRows: Array<[string, string, string?]> = [
+const idRows: Array<[string, string, string?, string?]> = [
   ['name', '주수민 (Ju Sumin)', 'fg'],
   ['role', 'AI Security Engineer'],
   ['focus', 'fuzzing · binary · ai'],
   ['edu', '백석대 정보보호학과 4th'],
-  ['pgp', '0xD2C0F846C3569321', 'am'],
+  ['pgp', '0xD2C0F846C3569321', 'am', '/pgp.asc'],
   ['creed', '공격자 관점으로 생각하기'],
 ];
 
@@ -28,10 +28,13 @@ function esc(s: string): string {
 }
 const idLine = '─'.repeat(ID_INNER);
 let idCardHtml = `<span class="v11-dim">╭${idLine}╮</span>\n`;
-for (const [k, v, c] of idRows) {
+for (const [k, v, c, href] of idRows) {
   const cls = c ? `v11-${c}` : '';
+  const val = href
+    ? `<a href="${href}" class="${cls}">${esc(v)}</a>`
+    : `<span class="${cls}">${esc(v)}</span>`;
   idCardHtml += `<span class="v11-dim">│ ${k.padEnd(8)}· </span>`
-    + `<span class="${cls}">${esc(v)}</span>${' '.repeat(idPad(v))}`
+    + `${val}${' '.repeat(idPad(v))}`
     + `<span class="v11-dim"> │</span>\n`;
 }
 idCardHtml += `<span class="v11-dim">╰${idLine}╯</span>`;
