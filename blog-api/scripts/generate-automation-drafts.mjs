@@ -33,6 +33,11 @@ const newsLimit = numberValue('SECURITY_NEWS_ITEM_LIMIT', 8);
 const minCvssScore = numberValue('CVE_MIN_CVSS_SCORE', 8.0);
 const nvdMaxPages = numberValue('NVD_MAX_PAGES', 3);
 const nvdResultsPerPage = Math.min(Math.max(numberValue('NVD_RESULTS_PER_PAGE', 200), 1), 2000);
+const openaiApiKey = process.env.OPENAI_API_KEY || '';
+const aiDraftsEnabled = !!openaiApiKey && !['0', 'false', 'off'].includes(String(process.env.AI_DRAFTS || '1').toLowerCase());
+const aiDraftRequired = ['1', 'true', 'on'].includes(String(process.env.AI_DRAFT_REQUIRED || '0').toLowerCase());
+const openaiDraftModel = process.env.OPENAI_DRAFT_MODEL || 'gpt-5.4-mini';
+const openaiDraftMaxOutputTokens = numberValue('OPENAI_DRAFT_MAX_OUTPUT_TOKENS', 2600);
 const nvdBaseUrl = process.env.NVD_CVE_API_URL || 'https://services.nvd.nist.gov/rest/json/cves/2.0';
 const cisaKevUrl = process.env.CISA_KEV_JSON_URL || 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
 const cisaKevFallbackUrl = process.env.CISA_KEV_FALLBACK_JSON_URL || 'https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json';
@@ -132,6 +137,92 @@ async function fetchJson(url, options = {}) {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function responseOutputText(data) {
+  if (typeof data?.output_text === 'string') return data.output_text.trim();
+  const parts = [];
+  for (const item of Array.isArray(data?.output) ? data.output : []) {
+    for (const content of Array.isArray(item?.content) ? item.content : []) {
+      if (typeof content?.text === 'string') parts.push(content.text);
+      if (typeof content?.refusal === 'string') parts.push(content.refusal);
+    }
+  }
+  return parts.join('\n').trim();
+}
+
+function aiSystemPrompt() {
+  return [
+    'You write Korean markdown review drafts for xmin.blog, a security research blog by Sumin Joo / xmin.',
+    'Use only the source data in the user message. Do not invent exploit status, affected versions, patches, products, dates, or references.',
+    'If the source data is incomplete, write "확인 필요" instead of guessing.',
+    'Keep the tone calm, technical, and attacker-perspective-aware, but do not include exploit code, payloads, step-by-step exploitation, or weaponized commands.',
+    'Output markdown only. Do not include YAML frontmatter or fenced code blocks.',
+  ].join('\n');
+}
+
+function aiInput(kind, source) {
+  const requirements = kind === 'cve'
+    ? [
+        'Write a Korean CVE review draft.',
+        'Required sections: 핵심 요약, 기술 배경, 공격자 관점에서 볼 부분, 영향 범위, 대응 및 패치, 검수 메모, 참고 링크.',
+        'Start with a blockquote warning that this is an AI 자동 작성 초안 and needs source/patched-version verification before publishing.',
+        'Do not include a top-level # heading because the blog renderer already shows the post title. Start section headings at ##.',
+      ]
+    : [
+        'Write a Korean daily security-news briefing draft.',
+        'Required sections: 오늘의 핵심 동향, 우선 확인할 이슈, 패치/완화 메모, 검수 메모, 원문 링크.',
+        'Group duplicate or related items when obvious from titles/summaries, but do not merge facts that are not supported by the source data.',
+        'Do not include a top-level # heading because the blog renderer already shows the post title. Start section headings at ##.',
+      ];
+  return `${requirements.join('\n')}\n\nSOURCE DATA JSON:\n${JSON.stringify(source, null, 2)}`;
+}
+
+async function generateAiDraft(kind, source, fallbackContent) {
+  if (!aiDraftsEnabled) return { content: fallbackContent, ai_generated_content: false };
+  try {
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${openaiApiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: openaiDraftModel,
+        max_output_tokens: openaiDraftMaxOutputTokens,
+        input: [
+          {
+            role: 'system',
+            content: [{ type: 'input_text', text: aiSystemPrompt() }],
+          },
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: aiInput(kind, source) }],
+          },
+        ],
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.error?.message || `OpenAI HTTP ${response.status}`);
+    }
+    const content = responseOutputText(data);
+    if (!content || content.length < 300) throw new Error('OpenAI response was too short');
+    return {
+      content,
+      ai_generated_content: true,
+      ai_model: openaiDraftModel,
+      ai_usage: data.usage || null,
+    };
+  } catch (error) {
+    console.warn(`[warn] AI draft failed for ${kind}: ${error.message}`);
+    if (aiDraftRequired) throw error;
+    return {
+      content: fallbackContent,
+      ai_generated_content: false,
+      ai_error: error.message,
+    };
+  }
 }
 
 class SQLiteStore {
@@ -380,7 +471,7 @@ function cveTitle(item) {
   return safeText(`[CVE] ${item.id}${products ? ` ${products}` : ''}`, 100);
 }
 
-function cvePost(item) {
+async function cvePost(item) {
   const cve = item.cve;
   const id = item.id;
   const desc = cveDescription(cve);
@@ -398,7 +489,7 @@ function cvePost(item) {
     ...weaknesses.map(w => w.toLowerCase()).filter(w => /^cwe-\d+/i.test(w)).slice(0, 2),
   ]);
 
-  const body = `> 자동 수집 초안입니다. 게시 전 영향 범위, 패치 링크, 공격 가능성 표현을 검수하세요.
+  const fallbackBody = `> 자동 수집 초안입니다. 게시 전 영향 범위, 패치 링크, 공격 가능성 표현을 검수하세요.
 
 ## 개요
 
@@ -441,14 +532,41 @@ ${kev ? `## CISA KEV 정보
 - [NVD 상세](${sourceUrl})
 ${refs.map(ref => `- [${ref.source || new URL(ref.url).hostname}](${ref.url})${ref.tags.length ? ` — ${ref.tags.join(', ')}` : ''}`).join('\n')}
 `;
+  const aiDraft = await generateAiDraft('cve', {
+    cve: id,
+    title,
+    description: desc,
+    metric: item.metric,
+    published: cve.published || null,
+    last_modified: cve.lastModified || null,
+    status: cve.vulnStatus || null,
+    kev: kev ? {
+      date_added: kev.dateAdded || null,
+      vendor_project: kev.vendorProject || null,
+      product: kev.product || null,
+      vulnerability_name: kev.vulnerabilityName || null,
+      required_action: kev.requiredAction || null,
+      due_date: kev.dueDate || null,
+      known_ransomware_campaign_use: kev.knownRansomwareCampaignUse || null,
+    } : null,
+    affected_products: affected,
+    weaknesses,
+    exploit_signal: exploitSignal(refs, kev),
+    references: [
+      { source: 'NVD', url: sourceUrl },
+      ...refs.map(ref => ({ source: ref.source, url: ref.url, tags: ref.tags })),
+    ],
+  }, fallbackBody);
+  const content = aiDraft.content;
+  const finalTags = aiDraft.ai_generated_content ? unique([...tags, 'ai-draft']) : tags;
 
   return {
     slug: slugify(`${id} ${affected[0] || kev?.vendorProject || ''}`) || id.toLowerCase(),
     title,
-    description: `${id} 자동 수집 초안: ${desc || item.metric.severity}`,
+    description: `${id} ${aiDraft.ai_generated_content ? 'AI 작성' : '자동 수집'} 초안: ${desc || item.metric.severity}`,
     date: isoDate(new Date(cve.published || Date.now())),
     category: 'cve',
-    tags,
+    tags: finalTags,
     draft: true,
     cover: '',
     is_private: false,
@@ -457,7 +575,9 @@ ${refs.map(ref => `- [${ref.source || new URL(ref.url).hostname}](${ref.url})${r
     source_id: id,
     auto_generated: true,
     review_status: 'pending',
-    content: body,
+    content,
+    ai_generated_content: aiDraft.ai_generated_content,
+    ai_model: aiDraft.ai_model || null,
   };
 }
 
@@ -542,7 +662,7 @@ function recentKevNews(catalog) {
     }));
 }
 
-function securityNewsPost(feedItems, kevItems) {
+async function securityNewsPost(feedItems, kevItems) {
   const today = isoDate();
   const items = [...feedItems, ...kevItems]
     .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
@@ -550,7 +670,7 @@ function securityNewsPost(feedItems, kevItems) {
   if (!items.length) return null;
 
   const sourceId = `security-news:${today}`;
-  const body = `> 자동 수집 초안입니다. 게시 전 링크 신뢰도, 중복 기사, 국내 독자에게 필요한 맥락을 검수하세요.
+  const fallbackBody = `> 자동 수집 초안입니다. 게시 전 링크 신뢰도, 중복 기사, 국내 독자에게 필요한 맥락을 검수하세요.
 
 ## 오늘의 보안 동향
 
@@ -569,14 +689,27 @@ ${items.map((item, index) => `### ${index + 1}. ${item.title}
 - [ ] 추측성 표현을 제거하고 원문 링크를 확인했습니다.
 - [ ] xmin.blog 톤에 맞게 한 문단 브리핑으로 정리했습니다.
 `;
+  const aiDraft = await generateAiDraft('security-news', {
+    date: today,
+    items: items.map(item => ({
+      title: item.title,
+      source: item.source,
+      published_at: isoDate(item.publishedAt),
+      link: item.link,
+      summary: item.summary,
+    })),
+  }, fallbackBody);
+  const content = aiDraft.content;
 
   return {
     slug: `security-news-${today}`,
     title: `${today} 보안 동향 브리핑`,
-    description: `자동 수집된 보안 뉴스 ${items.length}건 검수 초안입니다.`,
+    description: `${aiDraft.ai_generated_content ? 'AI가 정리한' : '자동 수집된'} 보안 뉴스 ${items.length}건 검수 초안입니다.`,
     date: today,
     category: 'security-news',
-    tags: ['security-news', 'automation', 'daily-brief'],
+    tags: aiDraft.ai_generated_content
+      ? ['security-news', 'automation', 'daily-brief', 'ai-draft']
+      : ['security-news', 'automation', 'daily-brief'],
     draft: true,
     cover: '',
     is_private: false,
@@ -585,15 +718,27 @@ ${items.map((item, index) => `### ${index + 1}. ${item.title}
     source_id: sourceId,
     auto_generated: true,
     review_status: 'pending',
-    content: body,
+    content,
+    ai_generated_content: aiDraft.ai_generated_content,
+    ai_model: aiDraft.ai_model || null,
   };
 }
 
 async function insertIfNew(store, post) {
   const existing = await store.existingSource(post.source_type, post.source_id);
-  if (existing) return { status: 'skipped', slug: existing.slug, reason: `existing ${existing.review_status}` };
+  if (existing) return skippedResult(existing);
   await store.insert(post);
-  return { status: dryRun ? 'dry-run' : 'created', slug: post.slug, source_id: post.source_id };
+  return {
+    status: dryRun ? 'dry-run' : 'created',
+    slug: post.slug,
+    source_id: post.source_id,
+    ai_generated_content: !!post.ai_generated_content,
+    ai_model: post.ai_model || undefined,
+  };
+}
+
+function skippedResult(existing) {
+  return { status: 'skipped', slug: existing.slug, reason: `existing ${existing.review_status}` };
 }
 
 async function runCveDrafts(store, catalog) {
@@ -601,15 +746,24 @@ async function runCveDrafts(store, catalog) {
   const selected = rankCves(cves, kevMap(catalog));
   const results = [];
   for (const item of selected) {
-    results.push(await insertIfNew(store, cvePost(item)));
+    const existing = await store.existingSource('cve', item.id);
+    if (existing) {
+      results.push(skippedResult(existing));
+      continue;
+    }
+    results.push(await insertIfNew(store, await cvePost(item)));
   }
   return { fetched: cves.length, selected: selected.length, results };
 }
 
 async function runSecurityNewsDraft(store, catalog) {
+  const sourceId = `security-news:${isoDate()}`;
+  const existing = await store.existingSource('security-news', sourceId);
+  if (existing) return { feed_items: 0, kev_items: 0, results: [skippedResult(existing)] };
+
   const feedItems = await fetchSecurityFeedItems();
   const kevItems = recentKevNews(catalog);
-  const post = securityNewsPost(feedItems, kevItems);
+  const post = await securityNewsPost(feedItems, kevItems);
   if (!post) return { feed_items: feedItems.length, kev_items: kevItems.length, results: [] };
   return {
     feed_items: feedItems.length,
@@ -626,7 +780,14 @@ async function main() {
   const store = await createStore();
   await loadSchema(store);
   const catalog = await loadKevCatalog();
-  const summary = { dry_run: dryRun, kind, cve: null, security_news: null };
+  const summary = {
+    dry_run: dryRun,
+    kind,
+    ai_drafts: aiDraftsEnabled,
+    ai_model: aiDraftsEnabled ? openaiDraftModel : null,
+    cve: null,
+    security_news: null,
+  };
 
   try {
     if (kind === 'all' || kind === 'cve') summary.cve = await runCveDrafts(store, catalog);

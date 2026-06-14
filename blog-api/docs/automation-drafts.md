@@ -13,6 +13,7 @@ The iOS admin app can review, edit, publish, or reject these drafts through the 
 - CVE drafts: NVD CVE API 2.0
 - Exploitation signal: CISA Known Exploited Vulnerabilities JSON catalog
 - Security news digest: configurable RSS/Atom feeds plus recent CISA KEV additions
+- AI draft body, when `OPENAI_API_KEY` is set: OpenAI Responses API
 
 ## Local Dry Run
 
@@ -42,6 +43,10 @@ npm run automate:drafts
 Useful environment variables:
 
 ```env
+OPENAI_API_KEY=optional-openai-api-key
+AI_DRAFTS=1
+OPENAI_DRAFT_MODEL=gpt-5.4-mini
+OPENAI_DRAFT_MAX_OUTPUT_TOKENS=2600
 NVD_API_KEY=optional-nvd-api-key
 CVE_LOOKBACK_DAYS=3
 CVE_DRAFT_LIMIT=5
@@ -52,6 +57,8 @@ SECURITY_NEWS_LOOKBACK_DAYS=1
 SECURITY_NEWS_ITEM_LIMIT=8
 SECURITY_NEWS_FEEDS=https://www.cisa.gov/cybersecurity-advisories/all.xml,https://www.cisa.gov/uscert/ncas/alerts.xml,https://www.cisa.gov/uscert/ncas/current-activity.xml
 ```
+
+If `OPENAI_API_KEY` is missing or `AI_DRAFTS=0`, the script writes the deterministic template-only draft. If the OpenAI call fails, the script falls back to that template unless `AI_DRAFT_REQUIRED=1` is set.
 
 ## systemd Timer
 

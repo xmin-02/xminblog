@@ -20,6 +20,9 @@ pnpm-debug.log*
 # macOS-specific files
 .DS_Store
 
+# local secret scratch files
+/무제.rtf
+
 # jetbrains setting folder
 .idea/
 
