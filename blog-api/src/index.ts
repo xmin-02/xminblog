@@ -1312,14 +1312,28 @@ async function getMyComments(request: Request, env: Env, origin: string | null):
   if (!user) return json({ error: 'Unauthorized' }, 401, origin);
 
   const userId = await getDbUserIdForAuth(user, env);
+  const publicOnly = user.role !== 'admin';
+  const publicWhere = publicOnly ? ' AND p.draft = ? AND p.is_private = ?' : '';
+  const params: unknown[] = [userId];
+  if (publicOnly) params.push(false, false);
 
   const rows = await env.DB.prepare(`
-    SELECT id, post_slug, content, created_at
-    FROM comments
-    WHERE user_id = ?
-    ORDER BY created_at DESC
+    SELECT c.id, c.post_slug, c.content, c.created_at,
+      p.title AS post_title, p.description AS post_description, p.date AS post_date
+    FROM comments c
+    JOIN posts p ON p.slug = c.post_slug
+    WHERE c.user_id = ?${publicWhere}
+    ORDER BY c.created_at DESC
     LIMIT 100
-  `).bind(userId).all<{ id: number; post_slug: string; content: string; created_at: number }>();
+  `).bind(...params).all<{
+    id: number;
+    post_slug: string;
+    content: string;
+    created_at: number;
+    post_title: string;
+    post_description: string;
+    post_date: string;
+  }>();
 
   return json(rows.results ?? [], 200, origin);
 }
@@ -1329,14 +1343,26 @@ async function getMyLikes(request: Request, env: Env, origin: string | null): Pr
   if (!user) return json({ error: 'Unauthorized' }, 401, origin);
 
   const userId = await getDbUserIdForAuth(user, env);
+  const publicOnly = user.role !== 'admin';
+  const publicWhere = publicOnly ? ' AND p.draft = ? AND p.is_private = ?' : '';
+  const params: unknown[] = [userId];
+  if (publicOnly) params.push(false, false);
 
   const rows = await env.DB.prepare(`
-    SELECT post_slug, created_at
-    FROM likes
-    WHERE user_id = ?
-    ORDER BY created_at DESC
+    SELECT l.post_slug, l.created_at,
+      p.title AS post_title, p.description AS post_description, p.date AS post_date
+    FROM likes l
+    JOIN posts p ON p.slug = l.post_slug
+    WHERE l.user_id = ?${publicWhere}
+    ORDER BY l.created_at DESC
     LIMIT 100
-  `).bind(userId).all<{ post_slug: string; created_at: number }>();
+  `).bind(...params).all<{
+    post_slug: string;
+    created_at: number;
+    post_title: string;
+    post_description: string;
+    post_date: string;
+  }>();
 
   return json(rows.results ?? [], 200, origin);
 }
@@ -1821,14 +1847,26 @@ async function updatePost(slug: string, payload: PostPayload, env: Env, origin: 
   return json({ slug, message: 'Post updated' }, 200, origin);
 }
 
+async function deletePostActivity(slug: string, env: Env): Promise<{ comments: number; likes: number; page_views: number }> {
+  const comments = await env.DB.prepare('DELETE FROM comments WHERE post_slug = ?').bind(slug).run();
+  const likes = await env.DB.prepare('DELETE FROM likes WHERE post_slug = ?').bind(slug).run();
+  const views = await env.DB.prepare('DELETE FROM page_views WHERE post_slug = ?').bind(slug).run();
+  return {
+    comments: comments.meta?.changes ?? 0,
+    likes: likes.meta?.changes ?? 0,
+    page_views: views.meta?.changes ?? 0,
+  };
+}
+
 async function deletePost(slug: string, env: Env, origin: string | null): Promise<Response> {
   if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
 
   if (contentBackend(env) === 'db') {
     const existing = await env.DB.prepare('SELECT slug FROM posts WHERE slug = ?').bind(slug).first();
     if (!existing) return json({ error: 'Post not found' }, 404, origin);
+    const deleted = await deletePostActivity(slug, env);
     await env.DB.prepare('DELETE FROM posts WHERE slug = ?').bind(slug).run();
-    return json({ slug, message: 'Post deleted' }, 200, origin);
+    return json({ slug, message: 'Post deleted', deleted }, 200, origin);
   }
 
   const { owner, repo, branch, token } = githubConfig(env);
@@ -1842,7 +1880,8 @@ async function deletePost(slug: string, env: Env, origin: string | null): Promis
   }
   const res = await ghDelete(`repos/${owner}/${repo}/contents/${filePath}`, { message: `chore: delete post "${slug}"`, sha: currentSha, branch }, token);
   if (!res.ok) return json({ error: `GitHub error: ${await res.text()}` }, 500, origin);
-  return json({ slug, message: 'Post deleted' }, 200, origin);
+  const deleted = await deletePostActivity(slug, env);
+  return json({ slug, message: 'Post deleted', deleted }, 200, origin);
 }
 
 function reviewBackendRequired(env: Env, origin: string | null): Response | null {

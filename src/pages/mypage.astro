@@ -562,10 +562,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     list.innerHTML = _mpLikes.map(item => {
       const slug = item.post_slug || item.slug;
       const post = bySlug.get(slug);
-      const title = post?.title || slug;
-      const desc = post?.description || (post ? '' : '글이 비공개이거나 삭제되었을 수 있습니다.');
+      const title = item.post_title || post?.title || slug;
+      const desc = item.post_description || post?.description || '';
       const likedAt = fmtDateTime(item.created_at);
-      const date = post?.date ? new Date(post.date).toLocaleDateString('ko-KR') : '';
+      const postDate = item.post_date || post?.date;
+      const date = postDate ? new Date(postDate).toLocaleDateString('ko-KR') : '';
       return `<a href="/post/?slug=${encodeURIComponent(slug)}" class="mp-row block">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
@@ -644,10 +645,34 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       });
       if (res.ok) {
         _mpPosts = _mpPosts.filter(p => p.slug !== slug);
+        _mpPublicPosts = _mpPublicPosts.filter(p => p.slug !== slug);
         renderMyPosts();
+        await Promise.all([loadMyLikes(), loadMyComments()]);
       }
       else { const d = await res.json(); alert('삭제 실패: ' + (d.error || res.status)); }
     } catch (e) { alert('오류: ' + e.message); }
+  }
+
+  function renderMyComments(comments) {
+    const list = document.getElementById('mp-comments-list');
+    _mpComments = comments || [];
+    setMpStat('mp-stat-comments', _mpComments.length.toLocaleString('ko-KR'));
+    if (!_mpComments.length) {
+      list.innerHTML = '<p class="text-xs text-[var(--color-text-secondary)]">댓글이 없습니다.</p>';
+      return;
+    }
+    list.innerHTML = _mpComments.map(c => {
+      const date = new Date(Number(c.created_at) * 1000).toLocaleString('ko-KR');
+      const title = c.post_title || c.post_slug;
+      return `<div class="mp-row" id="mp-c-${c.id}">
+        <div class="flex items-start justify-between gap-2 mb-1">
+          <a href="/post/?slug=${encodeURIComponent(c.post_slug)}" class="mp-link text-xs">${esc(title)}</a>
+          <button class="mp-del-btn" onclick="mpDeleteComment(${c.id})">삭제</button>
+        </div>
+        <p class="text-sm leading-relaxed" style="color:var(--color-text);">${esc(c.content)}</p>
+        <p class="mp-meta mt-1.5">${esc(date)}</p>
+      </div>`;
+    }).join('');
   }
 
   async function loadMyComments() {
@@ -656,21 +681,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     try {
       const res = await fetch(`${API_BASE}/api/auth/my-comments`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error('failed');
-      const comments = await res.json();
-      _mpComments = comments;
-      setMpStat('mp-stat-comments', comments.length.toLocaleString('ko-KR'));
-      if (!comments.length) { list.innerHTML = '<p class="text-xs text-[var(--color-text-secondary)]">댓글이 없습니다.</p>'; return; }
-      list.innerHTML = comments.map(c => {
-        const date = new Date(Number(c.created_at) * 1000).toLocaleString('ko-KR');
-        return `<div class="mp-row" id="mp-c-${c.id}">
-          <div class="flex items-start justify-between gap-2 mb-1">
-            <a href="/post/?slug=${encodeURIComponent(c.post_slug)}" class="mp-link text-xs">/post/?slug=${encodeURIComponent(c.post_slug)}</a>
-            <button class="mp-del-btn" onclick="mpDeleteComment(${c.id})">삭제</button>
-          </div>
-          <p class="text-sm leading-relaxed" style="color:var(--color-text);">${esc(c.content)}</p>
-          <p class="mp-meta mt-1.5">${esc(date)}</p>
-        </div>`;
-      }).join('');
+      renderMyComments(await res.json());
     } catch (err) {
       setMpStat('mp-stat-comments', '—');
       list.innerHTML = `<p class="text-xs" style="color:#ef4444;">불러오기 실패: ${esc(err.message)}</p>`;
@@ -685,7 +696,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) document.getElementById(`mp-c-${id}`)?.remove();
+      if (res.ok) renderMyComments(_mpComments.filter(c => c.id !== id));
       else alert('삭제 실패');
     } catch (e) { alert('오류: ' + e.message); }
   }
