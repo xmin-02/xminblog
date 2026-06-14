@@ -38,6 +38,7 @@ const aiDraftsEnabled = !!openaiApiKey && !['0', 'false', 'off'].includes(String
 const aiDraftRequired = ['1', 'true', 'on'].includes(String(process.env.AI_DRAFT_REQUIRED || '0').toLowerCase());
 const openaiDraftModel = process.env.OPENAI_DRAFT_MODEL || 'gpt-5.4-mini';
 const openaiDraftMaxOutputTokens = numberValue('OPENAI_DRAFT_MAX_OUTPUT_TOKENS', 2600);
+const aiDraftWarning = '> 주의: 이 글은 AI 자동 작성되었습니다. 반드시 재검증해야 합니다. 내용의 오류가 있을 경우 댓글 작성 부탁드립니다.';
 const nvdBaseUrl = process.env.NVD_CVE_API_URL || 'https://services.nvd.nist.gov/rest/json/cves/2.0';
 const cisaKevUrl = process.env.CISA_KEV_JSON_URL || 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
 const cisaKevFallbackUrl = process.env.CISA_KEV_FALLBACK_JSON_URL || 'https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json';
@@ -165,13 +166,18 @@ function aiInput(kind, source) {
   const requirements = kind === 'cve'
     ? [
         'Write a Korean CVE review draft.',
-        'Required sections: 핵심 요약, 기술 배경, 공격자 관점에서 볼 부분, 영향 범위, 대응 및 패치, 검수 메모, 참고 링크.',
-        'Start with a blockquote warning that this is an AI 자동 작성 초안 and needs source/patched-version verification before publishing.',
+        'Required sections: 핵심 요약, 기술 배경, 공격자 관점에서 볼 부분, 영향 범위, 대응 및 패치, 메모, 참고 링크.',
+        `Start with this exact blockquote warning: ${aiDraftWarning}`,
+        'Write publish-ready prose. Do not write internal review instructions, TODO checklists, or "게시 전에는 특히 아래를 재검증해야 합니다" style sections.',
+        'Do not include bullet lists about affected-version rechecks, patch rechecks, CVSS-vector rechecks, Deferred status rechecks, public exploit checks, or related research checks.',
+        'In 참고 링크, render every URL as a clickable Markdown link like [source name](https://example.com).',
         'Do not include a top-level # heading because the blog renderer already shows the post title. Start section headings at ##.',
       ]
     : [
         'Write a Korean daily security-news briefing draft.',
-        'Required sections: 오늘의 핵심 동향, 우선 확인할 이슈, 패치/완화 메모, 검수 메모, 원문 링크.',
+        'Required sections: 오늘의 핵심 동향, 우선 확인할 이슈, 패치/완화 메모, 메모, 원문 링크.',
+        'Write publish-ready prose. Do not write internal review instructions or TODO checklists.',
+        'In 원문 링크, render every URL as a clickable Markdown link like [source name](https://example.com).',
         'Group duplicate or related items when obvious from titles/summaries, but do not merge facts that are not supported by the source data.',
         'Do not include a top-level # heading because the blog renderer already shows the post title. Start section headings at ##.',
       ];
@@ -493,6 +499,27 @@ function cvePostSlug(item) {
   return slugify(`${item.id} ${affected[0] || item.kev?.vendorProject || ''}`) || item.id.toLowerCase();
 }
 
+function cveImpactPhrase(description) {
+  const text = String(description || '').toLowerCase();
+  if (/remote code execution|execute arbitrary code|code execution/.test(text)) return '임의 코드 실행';
+  if (/privilege escalation|escalat(?:e|ion).*privilege|gain elevated/.test(text)) return '권한 상승';
+  if (/authentication bypass|bypass authentication|auth bypass/.test(text)) return '인증 우회';
+  if (/information disclosure|information leak|data leak|expos(?:e|ure)/.test(text)) return '정보 노출';
+  if (/denial of service|\bdos\b|crash/.test(text)) return '서비스 거부';
+  if (/cross-site scripting|\bxss\b/.test(text)) return '스크립트 실행';
+  if (/sql injection|\bsqli\b/.test(text)) return 'SQL 인젝션';
+  return '보안 영향';
+}
+
+function cveOneLineDescription(item, description, affected, weaknesses) {
+  const kevProduct = item.kev ? [item.kev.vendorProject, item.kev.product].filter(Boolean).join(' ') : '';
+  const target = affected[0] || kevProduct || item.id;
+  const weakness = weaknesses[0] ? `${weaknesses[0]} 관련 ` : '';
+  const severity = item.metric.severity && item.metric.severity !== 'UNKNOWN' ? `${item.metric.severity} 등급의 ` : '';
+  const impact = cveImpactPhrase(description);
+  return safeText(`${target}에서 ${weakness}${severity}취약점이 공개되었으며, ${impact} 가능성이 있어 영향 범위와 패치 여부를 확인해야 합니다.`, 220);
+}
+
 async function cvePost(item) {
   const cve = item.cve;
   const id = item.id;
@@ -511,7 +538,9 @@ async function cvePost(item) {
     ...weaknesses.map(w => w.toLowerCase()).filter(w => /^cwe-\d+/i.test(w)).slice(0, 2),
   ]);
 
-  const fallbackBody = `> 자동 수집 초안입니다. 게시 전 영향 범위, 패치 링크, 공격 가능성 표현을 검수하세요.
+  const oneLineDescription = cveOneLineDescription(item, desc, affected, weaknesses);
+
+  const fallbackBody = `${aiDraftWarning}
 
 ## 개요
 
@@ -535,12 +564,9 @@ ${desc || 'NVD 설명을 확인한 뒤 요약을 보강하세요.'}
 - 약점 분류: ${weaknesses.length ? weaknesses.join(', ') : 'CWE 확인 필요'}
 - CVSS vector: ${item.metric.vector || '확인 필요'}
 
-## 검수 메모
+## 메모
 
-- [ ] 벤더 권고문과 패치 버전을 확인했습니다.
-- [ ] 실제 익스플로잇/PoC 공개 여부를 확인했습니다.
-- [ ] xmin.blog 독자에게 필요한 영향 범위만 남겼습니다.
-- [ ] 과장된 표현 없이 재현 가능성과 대응 우선순위를 정리했습니다.
+이 글은 자동 수집된 CVE 데이터를 바탕으로 정리했습니다. 환경과 제품 버전에 따라 실제 영향은 달라질 수 있으므로 운영 중인 구성과 공급사 권고를 함께 확인하는 편이 좋습니다.
 
 ${kev ? `## CISA KEV 정보
 
@@ -585,7 +611,7 @@ ${refs.map(ref => `- [${ref.source || new URL(ref.url).hostname}](${ref.url})${r
   return {
     slug: cvePostSlug(item),
     title,
-    description: `${id} ${aiDraft.ai_generated_content ? 'AI 작성' : '자동 수집'} 초안: ${desc || item.metric.severity}`,
+    description: oneLineDescription,
     date: isoDate(new Date(cve.published || Date.now())),
     category: 'cve',
     tags: finalTags,
@@ -692,7 +718,7 @@ async function securityNewsPost(feedItems, kevItems) {
   if (!items.length) return null;
 
   const sourceId = `security-news:${today}`;
-  const fallbackBody = `> 자동 수집 초안입니다. 게시 전 링크 신뢰도, 중복 기사, 국내 독자에게 필요한 맥락을 검수하세요.
+  const fallbackBody = `${aiDraftWarning}
 
 ## 오늘의 보안 동향
 
@@ -704,12 +730,9 @@ ${items.map((item, index) => `### ${index + 1}. ${item.title}
 - 요약: ${item.summary || '본문 확인 후 요약을 보강하세요.'}
 `).join('\n')}
 
-## 검수 메모
+## 메모
 
-- [ ] 같은 사건을 다룬 중복 링크를 합쳤습니다.
-- [ ] 패치/완화 조치가 필요한 항목을 위로 올렸습니다.
-- [ ] 추측성 표현을 제거하고 원문 링크를 확인했습니다.
-- [ ] xmin.blog 톤에 맞게 한 문단 브리핑으로 정리했습니다.
+이 글은 공개 보안 공지와 신뢰할 수 있는 피드를 바탕으로 자동 정리했습니다. 각 조직의 환경에 따라 우선순위가 달라질 수 있으므로 실제 적용 여부는 원문과 운영 환경을 함께 확인해야 합니다.
 `;
   const aiDraft = await generateAiDraft('security-news', {
     date: today,
