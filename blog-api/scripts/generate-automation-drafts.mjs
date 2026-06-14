@@ -27,9 +27,12 @@ const dbDriver = (process.env.DB_DRIVER || (process.env.DATABASE_URL ? 'postgres
 const dryRun = argSet.has('--dry-run') || process.env.AUTOMATION_DRY_RUN === '1' || process.env.AUTOMATION_DRY_RUN === 'true';
 const kind = argValue('--kind', process.env.AUTOMATION_KIND || 'all');
 const cveLookbackDays = numberValue('CVE_LOOKBACK_DAYS', 3);
-const newsLookbackDays = numberValue('SECURITY_NEWS_LOOKBACK_DAYS', 1);
 const cveLimit = numberValue('CVE_DRAFT_LIMIT', numberValue('AUTOMATION_LIMIT', 10));
 const newsLimit = numberValue('SECURITY_NEWS_ITEM_LIMIT', 8);
+const automationTimeZone = process.env.AUTOMATION_TIME_ZONE || 'Asia/Seoul';
+const automationUtcOffset = process.env.AUTOMATION_UTC_OFFSET || '+09:00';
+const securityNewsWindowStartHour = Math.min(Math.max(numberValue('SECURITY_NEWS_WINDOW_START_HOUR', 9), 0), 23);
+const securityNewsIncludeKev = ['1', 'true', 'on'].includes(String(process.env.SECURITY_NEWS_INCLUDE_KEV || '0').toLowerCase());
 const minCvssScore = numberValue('CVE_MIN_CVSS_SCORE', 8.0);
 const nvdMaxPages = numberValue('NVD_MAX_PAGES', 3);
 const nvdResultsPerPage = Math.min(Math.max(numberValue('NVD_RESULTS_PER_PAGE', 200), 1), 2000);
@@ -43,9 +46,9 @@ const nvdBaseUrl = process.env.NVD_CVE_API_URL || 'https://services.nvd.nist.gov
 const cisaKevUrl = process.env.CISA_KEV_JSON_URL || 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
 const cisaKevFallbackUrl = process.env.CISA_KEV_FALLBACK_JSON_URL || 'https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json';
 const securityNewsFeeds = csvEnv('SECURITY_NEWS_FEEDS', [
-  'https://www.cisa.gov/cybersecurity-advisories/all.xml',
-  'https://www.cisa.gov/uscert/ncas/alerts.xml',
-  'https://www.cisa.gov/uscert/ncas/current-activity.xml',
+  'https://www.boannews.com/media/news_rss.xml?mkind=1',
+  'https://www.boannews.com/media/news_rss.xml?skind=5',
+  'https://www.boannews.com/media/news_rss.xml?kind=5',
 ]);
 
 function argValue(name, fallback = '') {
@@ -76,6 +79,47 @@ function requiredEnv(name) {
 
 function isoDate(date = new Date()) {
   return date.toISOString().slice(0, 10);
+}
+
+function dateKey(date = new Date(), timeZone = automationTimeZone) {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const get = type => parts.find(part => part.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+function addDaysToDateKey(day, delta) {
+  const date = new Date(`${day}T00:00:00.000${automationUtcOffset}`);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return dateKey(date);
+}
+
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function zonedDateTime(day, hour, minute = 0, second = 0, millisecond = 0) {
+  return new Date(`${day}T${pad2(hour)}:${pad2(minute)}:${pad2(second)}.${String(millisecond).padStart(3, '0')}${automationUtcOffset}`);
+}
+
+function securityNewsWindow(now = new Date()) {
+  const reportDate = dateKey(now);
+  const startDate = addDaysToDateKey(reportDate, -1);
+  const endHour = (securityNewsWindowStartHour + 23) % 24;
+  const start = zonedDateTime(startDate, securityNewsWindowStartHour, 0, 0, 0);
+  const end = zonedDateTime(reportDate, endHour, 59, 59, 999);
+  return {
+    reportDate,
+    startDate,
+    endDate: reportDate,
+    start,
+    end,
+    label: `${startDate} ${pad2(securityNewsWindowStartHour)}:00:00 ~ ${reportDate} ${pad2(endHour)}:59:59 ${automationTimeZone}`,
+  };
 }
 
 function daysAgo(days) {
@@ -123,13 +167,28 @@ async function fetchText(url, options = {}) {
         redirect: 'follow',
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${safeText(await response.text(), 300)}`);
-      return await response.text();
+      return await decodeResponseText(response);
     } catch (error) {
       lastError = error;
       if (attempt < retries) await sleep(750 * (attempt + 1));
     }
   }
   throw lastError;
+}
+
+async function decodeResponseText(response) {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const probe = new TextDecoder('latin1').decode(bytes.slice(0, 500));
+  const contentType = response.headers.get('content-type') || '';
+  const declared = contentType.match(/charset=([^;\s]+)/i)?.[1]
+    || probe.match(/encoding=["']([^"']+)["']/i)?.[1]
+    || 'utf-8';
+  const encoding = declared.toLowerCase().replace(/^ks_c_5601-1987$/, 'euc-kr');
+  try {
+    return new TextDecoder(encoding).decode(bytes);
+  } catch {
+    return new TextDecoder('utf-8').decode(bytes);
+  }
 }
 
 async function fetchJson(url, options = {}) {
@@ -176,6 +235,7 @@ function aiInput(kind, source) {
     : [
         'Write a Korean daily security-news briefing draft.',
         'Required sections: 오늘의 핵심 동향, 우선 확인할 이슈, 패치/완화 메모, 메모, 원문 링크.',
+        'Summarize only the items inside collection_window. Mention the collection window near the beginning.',
         'Write publish-ready prose. Do not write internal review instructions or TODO checklists.',
         'If the source items array is empty, clearly say that no major new security-news items were collected for the day and keep the draft short.',
         'In 원문 링크, render every URL as a clickable Markdown link like [source name](https://example.com).',
@@ -663,7 +723,7 @@ function parseFeedItems(xml, feedUrl) {
   ].map(match => match[0]);
   const sourceTitle = tagValue(xml, 'title') || new URL(feedUrl).hostname;
   return blocks.map(block => {
-    const publishedRaw = tagValue(block, 'pubDate') || tagValue(block, 'published') || tagValue(block, 'updated');
+    const publishedRaw = tagValue(block, 'pubDate') || tagValue(block, 'dc:date') || tagValue(block, 'published') || tagValue(block, 'updated');
     const publishedAt = publishedRaw ? new Date(publishedRaw) : new Date();
     return {
       title: safeText(tagValue(block, 'title'), 220),
@@ -675,8 +735,7 @@ function parseFeedItems(xml, feedUrl) {
   }).filter(item => item.title && item.link);
 }
 
-async function fetchSecurityFeedItems() {
-  const since = daysAgo(newsLookbackDays);
+async function fetchSecurityFeedItems(window) {
   const allItems = [];
   for (const feed of securityNewsFeeds) {
     try {
@@ -688,7 +747,7 @@ async function fetchSecurityFeedItems() {
   }
   const byLink = new Map();
   for (const item of allItems) {
-    if (item.publishedAt < since) continue;
+    if (item.publishedAt < window.start || item.publishedAt > window.end) continue;
     if (!byLink.has(item.link)) byLink.set(item.link, item);
   }
   return Array.from(byLink.values())
@@ -696,10 +755,12 @@ async function fetchSecurityFeedItems() {
     .slice(0, newsLimit);
 }
 
-function recentKevNews(catalog) {
-  const since = isoDate(daysAgo(newsLookbackDays));
+function recentKevNews(catalog, window) {
   return (Array.isArray(catalog?.vulnerabilities) ? catalog.vulnerabilities : [])
-    .filter(row => String(row.dateAdded || '') >= since)
+    .filter(row => {
+      const addedAt = new Date(`${row.dateAdded}T12:00:00Z`);
+      return !Number.isNaN(addedAt.getTime()) && addedAt >= window.start && addedAt <= window.end;
+    })
     .sort((a, b) => String(b.dateAdded || '').localeCompare(String(a.dateAdded || '')))
     .slice(0, newsLimit)
     .map(row => ({
@@ -711,8 +772,8 @@ function recentKevNews(catalog) {
     }));
 }
 
-async function securityNewsPost(feedItems, kevItems) {
-  const today = isoDate();
+async function securityNewsPost(feedItems, kevItems, window) {
+  const today = window.reportDate;
   const items = [...feedItems, ...kevItems]
     .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
     .slice(0, newsLimit);
@@ -722,13 +783,15 @@ async function securityNewsPost(feedItems, kevItems) {
 
 ## 오늘의 보안 동향
 
+수집 기준: ${window.label}
+
 ${items.length ? items.map((item, index) => `### ${index + 1}. ${item.title}
 
 - 출처: ${item.source}
 - 공개일: ${isoDate(item.publishedAt)}
-- 링크: ${item.link}
+- 링크: [원문](${item.link})
 - 요약: ${item.summary || '본문 확인 후 요약을 보강하세요.'}
-`).join('\n') : '오늘 자동 수집된 주요 보안 뉴스 항목은 없습니다. 공개 피드와 CISA KEV 기준으로 신규 항목이 확인되지 않았습니다.'}
+`).join('\n') : '이번 수집 기준 구간에서 자동 수집된 주요 보안 뉴스 항목은 없습니다.'}
 
 ## 메모
 
@@ -736,6 +799,12 @@ ${items.length ? items.map((item, index) => `### ${index + 1}. ${item.title}
 `;
   const aiDraft = await generateAiDraft('security-news', {
     date: today,
+    collection_window: {
+      label: window.label,
+      start: window.start.toISOString(),
+      end: window.end.toISOString(),
+      time_zone: automationTimeZone,
+    },
     items: items.map(item => ({
       title: item.title,
       source: item.source,
@@ -750,8 +819,8 @@ ${items.length ? items.map((item, index) => `### ${index + 1}. ${item.title}
     slug: `security-news-${today}`,
     title: `${today} 보안 동향 브리핑`,
     description: items.length
-      ? `${aiDraft.ai_generated_content ? 'AI가 정리한' : '자동 수집된'} 보안 뉴스 ${items.length}건 브리핑입니다.`
-      : '오늘 자동 수집된 신규 보안 뉴스는 없습니다.',
+      ? `${window.startDate} 09시부터 ${window.endDate} 08시 59분까지 수집한 보안뉴스 ${items.length}건 브리핑입니다.`
+      : `${window.startDate} 09시부터 ${window.endDate} 08시 59분까지 수집된 신규 보안뉴스는 없습니다.`,
     date: today,
     category: 'security-news',
     tags: aiDraft.ai_generated_content
@@ -761,7 +830,7 @@ ${items.length ? items.map((item, index) => `### ${index + 1}. ${item.title}
     cover: '',
     is_private: false,
     source_type: 'security-news',
-    source_url: items[0]?.link || 'https://www.cisa.gov/news-events/cybersecurity-advisories',
+    source_url: items[0]?.link || 'https://www.boannews.com/custom/news_rss.asp',
     source_id: sourceId,
     auto_generated: true,
     review_status: 'pending',
@@ -804,15 +873,18 @@ async function runCveDrafts(store, catalog) {
 }
 
 async function runSecurityNewsDraft(store, catalog) {
-  const sourceId = `security-news:${isoDate()}`;
-  const existing = await store.existingSource('security-news', sourceId, `security-news-${isoDate()}`);
-  if (existing) return { feed_items: 0, kev_items: 0, results: [skippedResult(existing)] };
+  const window = securityNewsWindow();
+  const today = window.reportDate;
+  const sourceId = `security-news:${today}`;
+  const existing = await store.existingSource('security-news', sourceId, `security-news-${today}`);
+  if (existing) return { window: window.label, feed_items: 0, kev_items: 0, results: [skippedResult(existing)] };
 
-  const feedItems = await fetchSecurityFeedItems();
-  const kevItems = recentKevNews(catalog);
-  const post = await securityNewsPost(feedItems, kevItems);
-  if (!post) return { feed_items: feedItems.length, kev_items: kevItems.length, results: [] };
+  const feedItems = await fetchSecurityFeedItems(window);
+  const kevItems = securityNewsIncludeKev ? recentKevNews(catalog, window) : [];
+  const post = await securityNewsPost(feedItems, kevItems, window);
+  if (!post) return { window: window.label, feed_items: feedItems.length, kev_items: kevItems.length, results: [] };
   return {
+    window: window.label,
     feed_items: feedItems.length,
     kev_items: kevItems.length,
     results: [await insertIfNew(store, post)],

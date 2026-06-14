@@ -12,7 +12,7 @@ The iOS admin app can review, edit, publish, or reject these drafts through the 
 
 - CVE drafts: NVD CVE API 2.0
 - Exploitation signal: CISA Known Exploited Vulnerabilities JSON catalog
-- Security news digest: configurable RSS/Atom feeds plus recent CISA KEV additions
+- Security news digest: BoanNews official RSS feeds by default, with optional recent CISA KEV additions
 - AI draft body, when `OPENAI_API_KEY` is set: OpenAI Responses API
 
 ## Local Dry Run
@@ -53,9 +53,12 @@ CVE_DRAFT_LIMIT=10
 CVE_MIN_CVSS_SCORE=8
 NVD_MAX_PAGES=3
 NVD_RESULTS_PER_PAGE=200
-SECURITY_NEWS_LOOKBACK_DAYS=1
+AUTOMATION_TIME_ZONE=Asia/Seoul
+AUTOMATION_UTC_OFFSET=+09:00
+SECURITY_NEWS_WINDOW_START_HOUR=9
 SECURITY_NEWS_ITEM_LIMIT=8
-SECURITY_NEWS_FEEDS=https://www.cisa.gov/cybersecurity-advisories/all.xml,https://www.cisa.gov/uscert/ncas/alerts.xml,https://www.cisa.gov/uscert/ncas/current-activity.xml
+SECURITY_NEWS_INCLUDE_KEV=0
+SECURITY_NEWS_FEEDS=https://www.boannews.com/media/news_rss.xml?mkind=1,https://www.boannews.com/media/news_rss.xml?skind=5,https://www.boannews.com/media/news_rss.xml?kind=5
 ```
 
 If `OPENAI_API_KEY` is missing or `AI_DRAFTS=0`, the script writes the deterministic template-only draft. If the OpenAI call fails, the script falls back to that template unless `AI_DRAFT_REQUIRED=1` is set.
@@ -63,7 +66,7 @@ If `OPENAI_API_KEY` is missing or `AI_DRAFTS=0`, the script writes the determini
 Daily production automation runs both flows once:
 
 - CVE: creates up to 10 pending drafts per run.
-- Security news: creates one daily digest draft per date. `SECURITY_NEWS_ITEM_LIMIT` controls how many source items can be summarized inside that single digest.
+- Security news: creates one daily digest draft per date. At 09:00 Asia/Seoul, it summarizes items from the previous day 09:00:00 through the current day 08:59:59. `SECURITY_NEWS_ITEM_LIMIT` controls how many source items can be summarized inside that single digest.
 
 ## systemd Timer
 
