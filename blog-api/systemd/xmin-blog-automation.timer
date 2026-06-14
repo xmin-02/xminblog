@@ -1,0 +1,11 @@
+[Unit]
+Description=Run xmin.blog automation draft generator daily
+
+[Timer]
+OnCalendar=*-*-* 07:30:00
+Persistent=true
+RandomizedDelaySec=15m
+Unit=xmin-blog-automation.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,644 @@
+#!/usr/bin/env node
+/**
+ * Generate review-ready blog drafts from vulnerability/news feeds.
+ *
+ * Default outputs:
+ * - CVE watch drafts: one pending post per selected CVE.
+ * - Security news digest: one pending daily briefing post.
+ *
+ * Production example:
+ *   DATABASE_URL=postgresql://... npm run automate:drafts
+ *
+ * Local dry run:
+ *   DB_DRIVER=sqlite SQLITE_PATH=./data/automation.sqlite \
+ *   AUTOMATION_DRY_RUN=1 npm run automate:drafts -- --kind=all
+ */
+import { mkdirSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import pg from 'pg';
+
+const { Pool } = pg;
+pg.types.setTypeParser(20, value => Number(value));
+
+const cwd = process.cwd();
+const args = process.argv.slice(2);
+const argSet = new Set(args);
+const dbDriver = (process.env.DB_DRIVER || (process.env.DATABASE_URL ? 'postgres' : 'sqlite')).toLowerCase();
+const dryRun = argSet.has('--dry-run') || process.env.AUTOMATION_DRY_RUN === '1' || process.env.AUTOMATION_DRY_RUN === 'true';
+const kind = argValue('--kind', process.env.AUTOMATION_KIND || 'all');
+const cveLookbackDays = numberValue('CVE_LOOKBACK_DAYS', 3);
+const newsLookbackDays = numberValue('SECURITY_NEWS_LOOKBACK_DAYS', 1);
+const cveLimit = numberValue('CVE_DRAFT_LIMIT', numberValue('AUTOMATION_LIMIT', 5));
+const newsLimit = numberValue('SECURITY_NEWS_ITEM_LIMIT', 8);
+const minCvssScore = numberValue('CVE_MIN_CVSS_SCORE', 8.0);
+const nvdMaxPages = numberValue('NVD_MAX_PAGES', 3);
+const nvdResultsPerPage = Math.min(Math.max(numberValue('NVD_RESULTS_PER_PAGE', 200), 1), 2000);
+const nvdBaseUrl = process.env.NVD_CVE_API_URL || 'https://services.nvd.nist.gov/rest/json/cves/2.0';
+const cisaKevUrl = process.env.CISA_KEV_JSON_URL || 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
+const cisaKevFallbackUrl = process.env.CISA_KEV_FALLBACK_JSON_URL || 'https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json';
+const securityNewsFeeds = csvEnv('SECURITY_NEWS_FEEDS', [
+  'https://www.cisa.gov/cybersecurity-advisories/all.xml',
+  'https://www.cisa.gov/uscert/ncas/alerts.xml',
+  'https://www.cisa.gov/uscert/ncas/current-activity.xml',
+]);
+
+function argValue(name, fallback = '') {
+  const index = args.findIndex(arg => arg === name || arg.startsWith(`${name}=`));
+  if (index < 0) return fallback;
+  const raw = args[index];
+  if (raw.includes('=')) return raw.slice(raw.indexOf('=') + 1);
+  return args[index + 1] || fallback;
+}
+
+function numberValue(name, fallback) {
+  const raw = process.env[name] ?? argValue(`--${name.toLowerCase().replaceAll('_', '-')}`, String(fallback));
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function csvEnv(name, fallback) {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  return raw.split(',').map(item => item.trim()).filter(Boolean);
+}
+
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  return value;
+}
+
+function isoDate(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+function daysAgo(days) {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
+
+function dateTimeForNvd(date) {
+  return date.toISOString();
+}
+
+function safeText(value, max = 200) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function slugify(value) {
+  return safeText(value, 120)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 90);
+}
+
+function escapeMarkdown(value) {
+  return String(value ?? '').replace(/\|/g, '\\|').trim();
+}
+
+function unique(items) {
+  return Array.from(new Set(items.filter(Boolean)));
+}
+
+async function fetchText(url, options = {}) {
+  const retries = Number(options.retries ?? 2);
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'user-agent': 'xmin-blog-automation/1.0 (+https://xmin.blog)',
+          accept: options.accept || '*/*',
+          ...(options.headers || {}),
+        },
+        redirect: 'follow',
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${safeText(await response.text(), 300)}`);
+      return await response.text();
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) await sleep(750 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
+async function fetchJson(url, options = {}) {
+  return JSON.parse(await fetchText(url, { ...options, accept: 'application/json' }));
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+class SQLiteStore {
+  constructor(path, DatabaseSync) {
+    mkdirSync(dirname(path), { recursive: true });
+    this.db = new DatabaseSync(path);
+  }
+  exec(sql) { this.db.exec(sql); }
+  existingSource(sourceType, sourceId) {
+    return this.db.prepare('SELECT slug, review_status FROM posts WHERE source_type = ? AND source_id = ? LIMIT 1')
+      .get(sourceType, sourceId) ?? null;
+  }
+  insert(post) {
+    if (dryRun) return;
+    this.db.prepare(`
+      INSERT INTO posts (
+        slug, title, description, date, category, tags, draft, cover, is_private,
+        password_hash, source_type, source_url, source_id, auto_generated,
+        review_status, reviewed_at, content, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+    `).run(
+      post.slug,
+      post.title,
+      post.description,
+      post.date,
+      post.category,
+      JSON.stringify(post.tags),
+      post.draft ? 1 : 0,
+      post.cover,
+      post.is_private ? 1 : 0,
+      null,
+      post.source_type,
+      post.source_url,
+      post.source_id,
+      post.auto_generated ? 1 : 0,
+      post.review_status,
+      null,
+      post.content,
+    );
+  }
+  close() { this.db.close(); }
+}
+
+class PostgresStore {
+  constructor(databaseUrl) {
+    this.pool = new Pool({ connectionString: databaseUrl });
+  }
+  async exec(sql) { await this.pool.query(sql); }
+  async existingSource(sourceType, sourceId) {
+    const result = await this.pool.query(
+      'SELECT slug, review_status FROM posts WHERE source_type = $1 AND source_id = $2 LIMIT 1',
+      [sourceType, sourceId],
+    );
+    return result.rows[0] ?? null;
+  }
+  async insert(post) {
+    if (dryRun) return;
+    await this.pool.query(`
+      INSERT INTO posts (
+        slug, title, description, date, category, tags, draft, cover, is_private,
+        password_hash, source_type, source_url, source_id, auto_generated,
+        review_status, reviewed_at, content, updated_at
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, $11, $12, $13, $14, NULL, $15,
+        extract(epoch from now())::bigint
+      )
+    `, [
+      post.slug,
+      post.title,
+      post.description,
+      post.date,
+      post.category,
+      JSON.stringify(post.tags),
+      post.draft,
+      post.cover,
+      post.is_private,
+      post.source_type,
+      post.source_url,
+      post.source_id,
+      post.auto_generated,
+      post.review_status,
+      post.content,
+    ]);
+  }
+  async close() { await this.pool.end(); }
+}
+
+async function createStore() {
+  if (dbDriver === 'postgres') return new PostgresStore(requiredEnv('DATABASE_URL'));
+  if (dbDriver === 'sqlite') {
+    const { DatabaseSync } = await import('node:sqlite');
+    return new SQLiteStore(resolve(cwd, process.env.SQLITE_PATH || './data/blog.sqlite'), DatabaseSync);
+  }
+  throw new Error(`Unsupported DB_DRIVER: ${dbDriver}`);
+}
+
+async function loadSchema(store) {
+  const file = dbDriver === 'postgres' ? '../schema.postgres.sql' : '../schema.sql';
+  await store.exec(readFileSync(new URL(file, import.meta.url), 'utf8'));
+}
+
+async function loadKevCatalog() {
+  try {
+    return await fetchJson(cisaKevUrl);
+  } catch (error) {
+    console.warn(`[warn] CISA KEV primary failed: ${error.message}`);
+    return fetchJson(cisaKevFallbackUrl);
+  }
+}
+
+function kevMap(catalog) {
+  const rows = Array.isArray(catalog?.vulnerabilities) ? catalog.vulnerabilities : [];
+  return new Map(rows.map(row => [String(row.cveID || '').toUpperCase(), row]));
+}
+
+async function fetchNvdCves() {
+  const end = new Date();
+  const start = daysAgo(cveLookbackDays);
+  const cves = [];
+  const headers = {};
+  if (process.env.NVD_API_KEY) headers.apiKey = process.env.NVD_API_KEY;
+  for (let page = 0; page < nvdMaxPages; page++) {
+    const startIndex = page * nvdResultsPerPage;
+    const url = new URL(nvdBaseUrl);
+    url.searchParams.set('pubStartDate', dateTimeForNvd(start));
+    url.searchParams.set('pubEndDate', dateTimeForNvd(end));
+    url.searchParams.set('resultsPerPage', String(nvdResultsPerPage));
+    url.searchParams.set('startIndex', String(startIndex));
+    url.searchParams.set('noRejected', '');
+    const data = await fetchJson(url.toString(), { headers });
+    const rows = Array.isArray(data?.vulnerabilities) ? data.vulnerabilities.map(row => row.cve).filter(Boolean) : [];
+    cves.push(...rows);
+    const total = Number(data?.totalResults || rows.length);
+    if (startIndex + rows.length >= total || !rows.length) break;
+    await sleep(process.env.NVD_API_KEY ? 700 : 6500);
+  }
+  return cves;
+}
+
+function cveDescription(cve) {
+  const descriptions = Array.isArray(cve.descriptions) ? cve.descriptions : [];
+  return safeText(
+    descriptions.find(item => item.lang === 'en')?.value
+      || descriptions.find(item => item.lang === 'ko')?.value
+      || descriptions[0]?.value
+      || '',
+    1200,
+  );
+}
+
+function metricFor(cve) {
+  const metrics = cve.metrics || {};
+  const groups = [
+    ['CVSS 4.0', metrics.cvssMetricV40],
+    ['CVSS 3.1', metrics.cvssMetricV31],
+    ['CVSS 3.0', metrics.cvssMetricV30],
+    ['CVSS 2.0', metrics.cvssMetricV2],
+  ];
+  for (const [version, items] of groups) {
+    if (!Array.isArray(items) || !items.length) continue;
+    const primary = items.find(item => item.type === 'Primary') || items[0];
+    const data = primary.cvssData || {};
+    return {
+      version,
+      score: Number(data.baseScore ?? primary.baseScore ?? 0),
+      severity: safeText(data.baseSeverity ?? primary.baseSeverity ?? 'UNKNOWN', 40).toUpperCase(),
+      vector: safeText(data.vectorString ?? '', 200),
+    };
+  }
+  return { version: 'CVSS', score: 0, severity: 'UNKNOWN', vector: '' };
+}
+
+function weaknessesFor(cve) {
+  const weaknesses = Array.isArray(cve.weaknesses) ? cve.weaknesses : [];
+  return unique(weaknesses.flatMap(group => (
+    Array.isArray(group.description)
+      ? group.description.map(item => item.value)
+      : []
+  ))).slice(0, 8);
+}
+
+function referencesFor(cve) {
+  return (Array.isArray(cve.references?.referenceData) ? cve.references.referenceData : [])
+    .map(ref => ({
+      url: safeText(ref.url, 1000),
+      source: safeText(ref.source, 120),
+      tags: Array.isArray(ref.tags) ? ref.tags.map(String) : [],
+    }))
+    .filter(ref => ref.url)
+    .slice(0, 12);
+}
+
+function cpeProduct(cpe) {
+  const parts = String(cpe || '').split(':');
+  if (parts.length < 6) return '';
+  const vendor = decodeURIComponent(parts[3] || '').replace(/_/g, ' ');
+  const product = decodeURIComponent(parts[4] || '').replace(/_/g, ' ');
+  return [vendor, product].filter(part => part && part !== '*').join(' ');
+}
+
+function affectedProducts(cve) {
+  const products = [];
+  const walk = node => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node.cpeMatch)) {
+      for (const match of node.cpeMatch) {
+        if (match?.vulnerable === false) continue;
+        const product = cpeProduct(match?.criteria || match?.cpe23Uri);
+        if (product) products.push(product);
+      }
+    }
+    if (Array.isArray(node.nodes)) node.nodes.forEach(walk);
+  };
+  (Array.isArray(cve.configurations) ? cve.configurations : []).forEach(walk);
+  return unique(products).slice(0, 8);
+}
+
+function exploitSignal(refs, kev) {
+  if (kev) return 'CISA KEV 등록';
+  if (refs.some(ref => ref.tags.map(tag => tag.toLowerCase()).includes('exploit'))) return 'exploit reference';
+  return '공개 익스플로잇 신호 미확인';
+}
+
+function rankCves(cves, kevByCve) {
+  return cves
+    .map(cve => {
+      const id = String(cve.id || '').toUpperCase();
+      const metric = metricFor(cve);
+      const kev = kevByCve.get(id);
+      const refs = referencesFor(cve);
+      const exploitRefs = refs.filter(ref => ref.tags.map(tag => tag.toLowerCase()).includes('exploit')).length;
+      const rank = metric.score + (kev ? 10 : 0) + exploitRefs * 1.5;
+      return { cve, id, metric, kev, refs, rank };
+    })
+    .filter(item => item.id && (item.kev || item.metric.score >= minCvssScore))
+    .sort((a, b) => b.rank - a.rank || String(b.cve.published || '').localeCompare(String(a.cve.published || '')))
+    .slice(0, cveLimit);
+}
+
+function cveTitle(item) {
+  const products = item.kev
+    ? [item.kev.vendorProject, item.kev.product].filter(Boolean).join(' ')
+    : affectedProducts(item.cve)[0] || '';
+  return safeText(`[CVE] ${item.id}${products ? ` ${products}` : ''}`, 100);
+}
+
+function cvePost(item) {
+  const cve = item.cve;
+  const id = item.id;
+  const desc = cveDescription(cve);
+  const weaknesses = weaknessesFor(cve);
+  const affected = affectedProducts(cve);
+  const refs = item.refs;
+  const kev = item.kev;
+  const sourceUrl = `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(id)}`;
+  const title = cveTitle(item);
+  const tags = unique([
+    'cve',
+    'automation',
+    item.metric.severity.toLowerCase(),
+    kev ? 'kev' : '',
+    ...weaknesses.map(w => w.toLowerCase()).filter(w => /^cwe-\d+/i.test(w)).slice(0, 2),
+  ]);
+
+  const body = `> 자동 수집 초안입니다. 게시 전 영향 범위, 패치 링크, 공격 가능성 표현을 검수하세요.
+
+## 개요
+
+| 항목 | 내용 |
+| --- | --- |
+| CVE | ${escapeMarkdown(id)} |
+| 심각도 | ${escapeMarkdown(`${item.metric.severity} ${item.metric.score || 'N/A'} (${item.metric.version})`)} |
+| 공개일 | ${escapeMarkdown(String(cve.published || 'N/A'))} |
+| 수정일 | ${escapeMarkdown(String(cve.lastModified || 'N/A'))} |
+| 상태 | ${escapeMarkdown(String(cve.vulnStatus || 'N/A'))} |
+| KEV | ${escapeMarkdown(kev ? `등록됨 (${kev.dateAdded || 'date unknown'})` : '미등록')} |
+
+## 요약
+
+${desc || 'NVD 설명을 확인한 뒤 요약을 보강하세요.'}
+
+## 공격자 관점 체크
+
+- 악용 신호: ${exploitSignal(refs, kev)}
+- 영향 제품: ${affected.length ? affected.join(', ') : 'NVD CPE 확인 필요'}
+- 약점 분류: ${weaknesses.length ? weaknesses.join(', ') : 'CWE 확인 필요'}
+- CVSS vector: ${item.metric.vector || '확인 필요'}
+
+## 검수 메모
+
+- [ ] 벤더 권고문과 패치 버전을 확인했습니다.
+- [ ] 실제 익스플로잇/PoC 공개 여부를 확인했습니다.
+- [ ] xmin.blog 독자에게 필요한 영향 범위만 남겼습니다.
+- [ ] 과장된 표현 없이 재현 가능성과 대응 우선순위를 정리했습니다.
+
+${kev ? `## CISA KEV 정보
+
+- 취약점명: ${safeText(kev.vulnerabilityName, 300) || 'N/A'}
+- 요구 조치: ${safeText(kev.requiredAction, 500) || 'N/A'}
+- 마감일: ${safeText(kev.dueDate, 80) || 'N/A'}
+- 랜섬웨어 악용: ${safeText(kev.knownRansomwareCampaignUse, 80) || 'Unknown'}
+` : ''}
+## 참고 링크
+
+- [NVD 상세](${sourceUrl})
+${refs.map(ref => `- [${ref.source || new URL(ref.url).hostname}](${ref.url})${ref.tags.length ? ` — ${ref.tags.join(', ')}` : ''}`).join('\n')}
+`;
+
+  return {
+    slug: slugify(`${id} ${affected[0] || kev?.vendorProject || ''}`) || id.toLowerCase(),
+    title,
+    description: `${id} 자동 수집 초안: ${desc || item.metric.severity}`,
+    date: isoDate(new Date(cve.published || Date.now())),
+    category: 'cve',
+    tags,
+    draft: true,
+    cover: '',
+    is_private: false,
+    source_type: 'cve',
+    source_url: sourceUrl,
+    source_id: id,
+    auto_generated: true,
+    review_status: 'pending',
+    content: body,
+  };
+}
+
+function decodeXml(value = '') {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tagValue(xml, tag) {
+  const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  return match ? decodeXml(match[1]) : '';
+}
+
+function linkValue(xml) {
+  const rssLink = tagValue(xml, 'link');
+  if (rssLink) return rssLink;
+  const atom = xml.match(/<link[^>]+href=["']([^"']+)["'][^>]*>/i);
+  return atom ? decodeXml(atom[1]) : '';
+}
+
+function parseFeedItems(xml, feedUrl) {
+  const blocks = [
+    ...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi),
+    ...xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi),
+  ].map(match => match[0]);
+  const sourceTitle = tagValue(xml, 'title') || new URL(feedUrl).hostname;
+  return blocks.map(block => {
+    const publishedRaw = tagValue(block, 'pubDate') || tagValue(block, 'published') || tagValue(block, 'updated');
+    const publishedAt = publishedRaw ? new Date(publishedRaw) : new Date();
+    return {
+      title: safeText(tagValue(block, 'title'), 220),
+      link: safeText(linkValue(block), 1000),
+      summary: safeText(tagValue(block, 'description') || tagValue(block, 'summary') || tagValue(block, 'content'), 700),
+      publishedAt: Number.isNaN(publishedAt.getTime()) ? new Date() : publishedAt,
+      source: safeText(sourceTitle, 120),
+    };
+  }).filter(item => item.title && item.link);
+}
+
+async function fetchSecurityFeedItems() {
+  const since = daysAgo(newsLookbackDays);
+  const allItems = [];
+  for (const feed of securityNewsFeeds) {
+    try {
+      const xml = await fetchText(feed, { accept: 'application/rss+xml, application/atom+xml, text/xml' });
+      allItems.push(...parseFeedItems(xml, feed));
+    } catch (error) {
+      console.warn(`[warn] feed failed ${feed}: ${error.message}`);
+    }
+  }
+  const byLink = new Map();
+  for (const item of allItems) {
+    if (item.publishedAt < since) continue;
+    if (!byLink.has(item.link)) byLink.set(item.link, item);
+  }
+  return Array.from(byLink.values())
+    .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
+    .slice(0, newsLimit);
+}
+
+function recentKevNews(catalog) {
+  const since = isoDate(daysAgo(newsLookbackDays));
+  return (Array.isArray(catalog?.vulnerabilities) ? catalog.vulnerabilities : [])
+    .filter(row => String(row.dateAdded || '') >= since)
+    .sort((a, b) => String(b.dateAdded || '').localeCompare(String(a.dateAdded || '')))
+    .slice(0, newsLimit)
+    .map(row => ({
+      title: `CISA KEV 추가: ${row.cveID} ${safeText(row.vendorProject)} ${safeText(row.product)}`.trim(),
+      link: `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(row.cveID)}`,
+      summary: safeText(row.shortDescription || row.vulnerabilityName || row.requiredAction, 700),
+      publishedAt: new Date(`${row.dateAdded}T00:00:00Z`),
+      source: 'CISA KEV',
+    }));
+}
+
+function securityNewsPost(feedItems, kevItems) {
+  const today = isoDate();
+  const items = [...feedItems, ...kevItems]
+    .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
+    .slice(0, newsLimit);
+  if (!items.length) return null;
+
+  const sourceId = `security-news:${today}`;
+  const body = `> 자동 수집 초안입니다. 게시 전 링크 신뢰도, 중복 기사, 국내 독자에게 필요한 맥락을 검수하세요.
+
+## 오늘의 보안 동향
+
+${items.map((item, index) => `### ${index + 1}. ${item.title}
+
+- 출처: ${item.source}
+- 공개일: ${isoDate(item.publishedAt)}
+- 링크: ${item.link}
+- 요약: ${item.summary || '본문 확인 후 요약을 보강하세요.'}
+`).join('\n')}
+
+## 검수 메모
+
+- [ ] 같은 사건을 다룬 중복 링크를 합쳤습니다.
+- [ ] 패치/완화 조치가 필요한 항목을 위로 올렸습니다.
+- [ ] 추측성 표현을 제거하고 원문 링크를 확인했습니다.
+- [ ] xmin.blog 톤에 맞게 한 문단 브리핑으로 정리했습니다.
+`;
+
+  return {
+    slug: `security-news-${today}`,
+    title: `${today} 보안 동향 브리핑`,
+    description: `자동 수집된 보안 뉴스 ${items.length}건 검수 초안입니다.`,
+    date: today,
+    category: 'security-news',
+    tags: ['security-news', 'automation', 'daily-brief'],
+    draft: true,
+    cover: '',
+    is_private: false,
+    source_type: 'security-news',
+    source_url: items[0].link,
+    source_id: sourceId,
+    auto_generated: true,
+    review_status: 'pending',
+    content: body,
+  };
+}
+
+async function insertIfNew(store, post) {
+  const existing = await store.existingSource(post.source_type, post.source_id);
+  if (existing) return { status: 'skipped', slug: existing.slug, reason: `existing ${existing.review_status}` };
+  await store.insert(post);
+  return { status: dryRun ? 'dry-run' : 'created', slug: post.slug, source_id: post.source_id };
+}
+
+async function runCveDrafts(store, catalog) {
+  const cves = await fetchNvdCves();
+  const selected = rankCves(cves, kevMap(catalog));
+  const results = [];
+  for (const item of selected) {
+    results.push(await insertIfNew(store, cvePost(item)));
+  }
+  return { fetched: cves.length, selected: selected.length, results };
+}
+
+async function runSecurityNewsDraft(store, catalog) {
+  const feedItems = await fetchSecurityFeedItems();
+  const kevItems = recentKevNews(catalog);
+  const post = securityNewsPost(feedItems, kevItems);
+  if (!post) return { feed_items: feedItems.length, kev_items: kevItems.length, results: [] };
+  return {
+    feed_items: feedItems.length,
+    kev_items: kevItems.length,
+    results: [await insertIfNew(store, post)],
+  };
+}
+
+async function main() {
+  if (!['all', 'cve', 'security-news'].includes(kind)) {
+    throw new Error('Invalid --kind. Use all, cve, or security-news.');
+  }
+
+  const store = await createStore();
+  await loadSchema(store);
+  const catalog = await loadKevCatalog();
+  const summary = { dry_run: dryRun, kind, cve: null, security_news: null };
+
+  try {
+    if (kind === 'all' || kind === 'cve') summary.cve = await runCveDrafts(store, catalog);
+    if (kind === 'all' || kind === 'security-news') summary.security_news = await runSecurityNewsDraft(store, catalog);
+  } finally {
+    await store.close();
+  }
+
+  console.log(JSON.stringify(summary, null, 2));
+}
+
+main().catch(error => {
+  console.error(JSON.stringify({ error: error.message, stack: error.stack }, null, 2));
+  process.exit(1);
+});
