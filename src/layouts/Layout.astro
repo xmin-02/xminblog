@@ -7,7 +7,7 @@ interface Props {
   canonical?: string;
   noindex?: boolean;
   ogType?: string;
-  /** Active local-nav index: 0 home · 1 posts · 2 CVE Research · 3 Security News · 4 tags · 5 about · 6 rss. Auto-detected if omitted. */
+  /** Active local-nav index: 0 home · 1 posts · 2 secret · 3 CVE Research · 4 Security News · 5 tags · 6 about · 7 rss. Auto-detected if omitted. */
   active?: number;
   /** Prompt path shown on the right of the local nav, e.g. "posts/zdi-25-1055". */
   path?: string;
@@ -35,11 +35,12 @@ const pathname = Astro.url.pathname;
 function autoActive() {
   if (pathname === '/' || pathname === '') return 0;
   if (pathname.startsWith('/posts') || pathname.startsWith('/post') || pathname.startsWith('/blog')) return 1;
-  if (pathname.startsWith('/cve')) return 2;
-  if (pathname.startsWith('/security-news')) return 3;
-  if (pathname.startsWith('/tags')) return 4;
-  if (pathname.startsWith('/about')) return 5;
-  if (pathname.startsWith('/rss')) return 6;
+  if (pathname.startsWith('/secret')) return 2;
+  if (pathname.startsWith('/cve')) return 3;
+  if (pathname.startsWith('/security-news')) return 4;
+  if (pathname.startsWith('/tags')) return 5;
+  if (pathname.startsWith('/about')) return 6;
+  if (pathname.startsWith('/rss')) return 7;
   return -1;
 }
 const active = Astro.props.active ?? autoActive();
@@ -51,13 +52,14 @@ const sites = [
   ['Contact', 'mailto:x@xmin.sh', false],
 ];
 const local = [
-  ['home', '/'],
-  ['posts', '/posts'],
-  ['CVE Research', '/cve'],
-  ['Security News', '/security-news'],
-  ['tags', '/tags'],
-  ['about', '/about'],
-  ['rss', '/rss.xml'],
+  ['home', '/', false],
+  ['posts', '/posts', false],
+  ['secret', '/secret', true],
+  ['CVE Research', '/cve', false],
+  ['Security News', '/security-news', false],
+  ['tags', '/tags', false],
+  ['about', '/about', false],
+  ['rss', '/rss.xml', false],
 ];
 
 const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.xmin.cloud';
@@ -112,9 +114,9 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.xmin.cloud';
 
     <!-- local blog nav -->
     <div class="v11-localbar">
-      <nav class="v11-localnav">
-        {local.map(([name, href], i) => (
-          <a href={href} class={active === i ? 'is-active' : ''}>{active === i && <span class="v11-gr">·</span>}{name}</a>
+      <nav class="v11-localnav" id="v11-localnav">
+        {local.map(([name, href, adminOnly], i) => (
+          <a href={href} class:list={[active === i && 'is-active', adminOnly && 'is-admin-only']}>{active === i && <span class="v11-gr">·</span>}{name}</a>
         ))}
       </nav>
       <span class="v11-promptpath"><span class="v11-dim">~/</span><span class="v11-gr">{path}</span> $<span class="v11-cursor"></span></span>
@@ -143,14 +145,17 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.xmin.cloud';
         var raw = localStorage.getItem('auth_user');
         var user = null;
         try { user = raw ? JSON.parse(raw) : null; } catch (e) {}
+        var localnav = document.getElementById('v11-localnav');
         if (token && user) {
           var nick = esc(user.nickname || (user.email ? user.email.split('@')[0] : 'user'));
           var admin = user.role === 'admin';
+          if (localnav) localnav.classList.toggle('is-admin', admin);
           el.innerHTML = nick + '@xmin <span class="v11-gr">~</span> $'
             + (admin ? ' <a href="/post#new" class="v11-auth-link">+new</a> <a href="/admin" class="v11-auth-link">admin</a>' : '')
             + ' <a href="/mypage" class="v11-auth-link">mypage</a>'
             + ' <a href="#" onclick="v11Logout(event)" class="v11-auth-link v11-auth-dim">logout</a>';
         } else {
+          if (localnav) localnav.classList.remove('is-admin');
           el.innerHTML = 'guest@xmin <span class="v11-gr">~</span> $ <a href="/login" class="v11-auth-link">login</a>';
         }
       })();
@@ -218,6 +223,8 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.xmin.cloud';
   }
   .v11-localnav { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; }
   .v11-localnav a { color: var(--color-subtle); font-weight: 400; white-space: nowrap; }
+  .v11-localnav .is-admin-only { display: none !important; }
+  .v11-localnav.is-admin .is-admin-only { display: inline !important; }
   .v11-localnav a.is-active { color: var(--color-fg); font-weight: 600; }
   .v11-localnav a:hover { color: var(--color-green-br); text-decoration: none; }
   .v11-promptpath { color: var(--color-subtle); font-size: 12px; }
