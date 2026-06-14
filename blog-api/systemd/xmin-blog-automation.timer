@@ -2,7 +2,8 @@
 Description=Run xmin.blog automation draft generator daily
 
 [Timer]
-OnCalendar=*-*-* 07:30:00
+# 07:30 Asia/Seoul. The home-server LXC currently reports UTC.
+OnCalendar=*-*-* 22:30:00 UTC
 Persistent=true
 RandomizedDelaySec=15m
 Unit=xmin-blog-automation.service
