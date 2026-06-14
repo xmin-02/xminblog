@@ -491,6 +491,15 @@ function cleanShortText(value: unknown, fallback = '', max = 120): string {
   return String(value ?? fallback).trim().slice(0, max);
 }
 
+function cleanCategory(value: unknown): string {
+  if (Array.isArray(value)) throw new Error('category must be a single value');
+  const category = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (!category) return '';
+  if (/[,;\n\r|]/.test(category)) throw new Error('category must be a single value');
+  if (category.length > 80) throw new Error('category is too long');
+  return category;
+}
+
 function cleanSourceUrl(value: unknown): string {
   const url = String(value ?? '').trim();
   if (!url) return '';
@@ -1701,6 +1710,15 @@ async function preparePrivateFields(payload: PostPayload, existingHash?: string)
 }
 
 async function createPost(payload: PostPayload, env: Env, origin: string | null, ctx?: ExecutionContext): Promise<Response> {
+  let category: string;
+  try {
+    category = cleanCategory(payload.category);
+  } catch (err) {
+    return json({ error: (err as Error).message }, 400, origin);
+  }
+  if (!category) return json({ error: 'category is required' }, 400, origin);
+  payload.category = category;
+
   const slug = slugify(payload.title);
   if (!slug) return json({ error: 'Could not derive slug from title' }, 400, origin);
   if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
@@ -1729,7 +1747,7 @@ async function createPost(payload: PostPayload, env: Env, origin: string | null,
       payload.title,
       payload.description ?? '',
       payload.date,
-      payload.category,
+      category,
       JSON.stringify(payload.tags ?? []),
       !!payload.draft,
       payload.cover ?? '',
@@ -1782,6 +1800,14 @@ async function createPost(payload: PostPayload, env: Env, origin: string | null,
 
 async function updatePost(slug: string, payload: PostPayload, env: Env, origin: string | null): Promise<Response> {
   if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
+  let category: string;
+  try {
+    category = cleanCategory(payload.category);
+  } catch (err) {
+    return json({ error: (err as Error).message }, 400, origin);
+  }
+  if (!category) return json({ error: 'category is required' }, 400, origin);
+  payload.category = category;
 
   if (contentBackend(env) === 'db') {
     const existing = await readPostRow(slug, env);
@@ -1806,7 +1832,7 @@ async function updatePost(slug: string, payload: PostPayload, env: Env, origin: 
       payload.title,
       payload.description ?? '',
       payload.date,
-      payload.category,
+      category,
       JSON.stringify(payload.tags ?? []),
       !!payload.draft,
       payload.cover ?? '',
