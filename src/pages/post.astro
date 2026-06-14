@@ -443,6 +443,87 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  const CODE_LANGUAGE_LABELS = {
+    c: 'C',
+    cpp: 'C++',
+    cxx: 'C++',
+    cc: 'C++',
+    h: 'C',
+    hpp: 'C++',
+    asm: 'ASM',
+    nasm: 'ASM',
+    windbg: 'WinDbg',
+    dbg: 'WinDbg',
+    text: 'TEXT',
+    txt: 'TEXT',
+    sh: 'Shell',
+    shell: 'Shell',
+    bash: 'Shell',
+    zsh: 'Shell',
+    powershell: 'PowerShell',
+    ps1: 'PowerShell',
+    js: 'JavaScript',
+    javascript: 'JavaScript',
+    ts: 'TypeScript',
+    typescript: 'TypeScript',
+    html: 'HTML',
+    css: 'CSS',
+    json: 'JSON',
+    yaml: 'YAML',
+    yml: 'YAML',
+    python: 'Python',
+    py: 'Python',
+    rust: 'Rust',
+    rs: 'Rust',
+    go: 'Go',
+    sql: 'SQL',
+  };
+
+  function normalizeCodeLanguage(raw) {
+    const first = String(raw || '').trim().split(/\s+/)[0] || '';
+    const clean = first.toLowerCase().replace(/^\./, '').replace(/[^a-z0-9+#_-]/g, '');
+    if (clean === 'c++') return 'cpp';
+    if (clean === 'objective-c' || clean === 'objc') return 'objc';
+    return clean || 'text';
+  }
+
+  function codeLanguageLabel(raw) {
+    const normalized = normalizeCodeLanguage(raw);
+    return CODE_LANGUAGE_LABELS[normalized] || normalized.toUpperCase();
+  }
+
+  function inferCodeLanguage(code) {
+    const value = String(code || '').trim();
+    if (!value) return 'text';
+    if (/(\d+:\d+>|Access violation|ExceptionAddress|mfmp4srcsnk!|[er]ax=|[er]cx=)/i.test(value)) return 'windbg';
+    if (/^\s*[{[]/.test(value)) {
+      try { JSON.parse(value); return 'json'; } catch {}
+    }
+    if (/(#include\s*<|__int64|_QWORD|goto\s+LABEL_|^\s*for\s*\(|;\s*$|^\s*if\s*\()/m.test(value)) return 'c';
+    if (/^\s*(\$|#)\s+|(^|\n)\s*(npm|pnpm|git|curl|ssh|python3?)\s+/m.test(value)) return 'sh';
+    if (/(^|\n)\s*(const|let|var|function|import|export)\s+|=>/.test(value)) return 'js';
+    return 'text';
+  }
+
+  function codeLanguageFromClass(code) {
+    if (!code) return '';
+    for (const cls of Array.from(code.classList || [])) {
+      const m = cls.match(/^language-(.+)$/i);
+      if (m) return m[1];
+    }
+    return '';
+  }
+
+  function renderCodeBlockHtml(lang, code) {
+    const explicit = normalizeCodeLanguage(lang);
+    const language = explicit !== 'text' ? explicit : inferCodeLanguage(code);
+    const label = language && language !== 'text' ? codeLanguageLabel(language) : '';
+    const preAttr = label ? ` data-code-lang="${esc(label)}"` : '';
+    const codeAttr = language && language !== 'text' ? ` class="language-${esc(language)}"` : '';
+    const body = String(code || '').replace(/\r\n?/g, '\n').replace(/\n$/, '');
+    return `<pre${preAttr}><code${codeAttr}>${esc(body)}</code></pre>`;
+  }
+
   const DEFAULT_COVER_CROP = { x: 50, y: 50, zoom: 1 };
 
   function clampCoverNumber(value, min, max, fallback) {
@@ -611,11 +692,18 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   }
 
   function renderMarkdown(md) {
-    let html = md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const codeBlocks = [];
+    let html = String(md ?? '').replace(/\r\n?/g, '\n');
 
-    // Code blocks first so their content is preserved verbatim
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
-      `\n\n<pre><code class="language-${lang || 'text'}">${code.trimEnd()}</code></pre>\n\n`);
+    // Pull fenced code out before paragraph splitting so blank lines and
+    // indentation inside code are preserved verbatim.
+    html = html.replace(/```([^\n`]*)\n([\s\S]*?)```/g, (_, lang, code) => {
+      const id = codeBlocks.length;
+      codeBlocks.push(renderCodeBlockHtml(lang, code));
+      return `\n\n@@XMIN_CODE_BLOCK_${id}@@\n\n`;
+    });
+
+    html = html.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
     // Inline media/links
@@ -641,6 +729,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return html.split(/\n{2,}/).map(block => {
       const t = block.trim();
       if (!t) return '';
+      const codeMatch = t.match(/^@@XMIN_CODE_BLOCK_(\d+)@@$/);
+      if (codeMatch) return codeBlocks[Number(codeMatch[1])] || '';
       if (/^<(h[1-6]|pre|blockquote|hr|img)/.test(t)) return t;
 
       const lines = t.split('\n');
@@ -679,6 +769,32 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return /^\s*<(p|h[1-6]|ul|ol|blockquote|pre|table|figure|div|hr|img|span)[\s>]/i.test(s || '');
   }
 
+  function decorateCodeBlocks(root) {
+    root.querySelectorAll('pre').forEach(pre => {
+      let code = pre.querySelector('code');
+      if (!code) {
+        const raw = pre.textContent || '';
+        pre.textContent = '';
+        code = document.createElement('code');
+        code.textContent = raw;
+        pre.appendChild(code);
+      }
+
+      const declared = pre.getAttribute('data-code-lang')
+        || codeLanguageFromClass(code)
+        || code.getAttribute('data-language')
+        || pre.getAttribute('data-language')
+        || '';
+      const language = declared ? normalizeCodeLanguage(declared) : inferCodeLanguage(code.textContent || '');
+      if (language && language !== 'text') {
+        pre.setAttribute('data-code-lang', codeLanguageLabel(language));
+        code.classList.add(`language-${language}`);
+      } else {
+        pre.removeAttribute('data-code-lang');
+      }
+    });
+  }
+
   // Sanitize admin-authored HTML and wrap images in the terminal frame.
   function sanitizeAndFrame(html) {
     const root = document.createElement('div');
@@ -693,6 +809,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         else if (name === 'style' && /(expression|url\s*\(|position\s*:|@import|fixed)/i.test(val)) el.removeAttribute(attr.name);
       });
     });
+    decorateCodeBlocks(root);
     root.querySelectorAll('img').forEach(img => {
       if (img.closest('.imgframe')) return;
       const src = img.getAttribute('src') || '';

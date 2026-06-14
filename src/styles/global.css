@@ -391,6 +391,7 @@ a:hover { color: var(--color-green-br); text-decoration: underline; text-underli
   border: 1px solid var(--color-border);
 }
 .prose pre {
+  position: relative;
   padding: 14px 16px;
   border-radius: 2px;
   overflow-x: auto;
@@ -399,14 +400,38 @@ a:hover { color: var(--color-green-br); text-decoration: underline; text-underli
   border: 1px solid var(--color-border);
   font-size: 12.5px;
   line-height: 1.7;
+  white-space: pre;
+  tab-size: 4;
+}
+.prose pre[data-code-lang] {
+  padding-top: 36px;
+}
+.prose pre[data-code-lang]::before {
+  content: attr(data-code-lang);
+  position: absolute;
+  top: 9px;
+  right: 12px;
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  background: rgba(65, 189, 93, 0.09);
+  color: var(--color-green);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  pointer-events: none;
 }
 .prose pre code {
+  display: block;
   padding: 0;
   border-radius: 0;
   background: transparent;
   border: none;
   font-size: inherit;
   color: var(--color-text);
+  white-space: pre;
+  tab-size: inherit;
 }
 .prose blockquote {
   border-left: 3px solid var(--color-green);

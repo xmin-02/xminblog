@@ -1,6 +1,6 @@
 /**
  * Block-style rich editor for blog posts.
- * Storage stays as Markdown; this module handles MD ↔ HTML round-trip.
+ * New post bodies are stored as HTML; legacy Markdown is accepted and converted.
  *
  * Features
  *   - Tiptap-based block editor (Notion-like UX)
@@ -9,8 +9,9 @@
  *   - Tables, lists, code blocks, blockquote, hr, link
  */
 
-import { Editor, Extension, Mark } from '@tiptap/core';
+import { Editor, Extension, Mark, mergeAttributes } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
+import { CodeBlock } from '@tiptap/extension-code-block';
 import { Image } from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
@@ -44,6 +45,55 @@ export interface BlogEditorHandle {
 // ── Markdown ↔ HTML ─────────────────────────────────────────────────────────
 
 marked.setOptions({ gfm: true, breaks: false });
+
+const codeLanguageLabels: Record<string, string> = {
+  c: 'C',
+  cpp: 'C++',
+  cxx: 'C++',
+  cc: 'C++',
+  h: 'C',
+  hpp: 'C++',
+  asm: 'ASM',
+  nasm: 'ASM',
+  windbg: 'WinDbg',
+  dbg: 'WinDbg',
+  text: 'TEXT',
+  txt: 'TEXT',
+  sh: 'Shell',
+  shell: 'Shell',
+  bash: 'Shell',
+  zsh: 'Shell',
+  powershell: 'PowerShell',
+  ps1: 'PowerShell',
+  js: 'JavaScript',
+  javascript: 'JavaScript',
+  ts: 'TypeScript',
+  typescript: 'TypeScript',
+  html: 'HTML',
+  css: 'CSS',
+  json: 'JSON',
+  yaml: 'YAML',
+  yml: 'YAML',
+  python: 'Python',
+  py: 'Python',
+  rust: 'Rust',
+  rs: 'Rust',
+  go: 'Go',
+  sql: 'SQL',
+};
+
+function normalizeCodeLanguage(raw?: string | null): string {
+  const first = String(raw || '').trim().split(/\s+/)[0] || '';
+  const clean = first.toLowerCase().replace(/^\./, '').replace(/[^a-z0-9+#_-]/g, '');
+  if (clean === 'c++') return 'cpp';
+  if (clean === 'objective-c' || clean === 'objc') return 'objc';
+  return clean || 'text';
+}
+
+function codeLanguageLabel(raw?: string | null): string {
+  const normalized = normalizeCodeLanguage(raw);
+  return codeLanguageLabels[normalized] || normalized.toUpperCase();
+}
 
 const turndown = new TurndownService({
   headingStyle: 'atx',
@@ -83,6 +133,39 @@ export function isHtmlContent(s: string): boolean {
 function contentToHtml(s: string): string {
   return isHtmlContent(s) ? s : mdToHtml(s);
 }
+
+function looksLikeMarkdownPaste(text: string): boolean {
+  const value = String(text || '');
+  if (value.length < 3) return false;
+  return /(^|\n)```[^\n]*\n/.test(value)
+    || /(^|\n)#{1,4}\s+\S/.test(value)
+    || /(^|\n)>\s+\S/.test(value)
+    || /(^|\n)\s*[-*]\s+\S/.test(value)
+    || /(^|\n)\s*\d+\.\s+\S/.test(value)
+    || /(^|\n)\|.+\|\n\s*\|?[\s|:-]+\|/.test(value)
+    || /!\[[^\]]*]\([^)]+\)/.test(value)
+    || /\[[^\]]+]\([^)]+\)/.test(value);
+}
+
+const LanguageCodeBlock = CodeBlock.extend({
+  renderHTML({ node, HTMLAttributes }) {
+    const language = normalizeCodeLanguage(node.attrs.language);
+    const hasLanguage = language && language !== 'text';
+    return [
+      'pre',
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+        'data-code-lang': hasLanguage ? codeLanguageLabel(language) : null,
+      }),
+      [
+        'code',
+        {
+          class: hasLanguage ? `${this.options.languageClassPrefix}${language}` : null,
+        },
+        0,
+      ],
+    ];
+  },
+});
 
 // ── Resizable image ─────────────────────────────────────────────────────────
 // Extends the base Image node with a `width` attribute and a drag-handle
@@ -654,6 +737,12 @@ export function createBlogEditor(opts: BlogEditorOptions): BlogEditorHandle {
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4] },
+        codeBlock: false,
+      }),
+      LanguageCodeBlock.configure({
+        languageClassPrefix: 'language-',
+        enableTabIndentation: true,
+        tabSize: 4,
       }),
       ResizableImage.configure({ inline: false, allowBase64: false, HTMLAttributes: { class: 'tt-img' } }),
       TextAlign,
@@ -677,7 +766,8 @@ export function createBlogEditor(opts: BlogEditorOptions): BlogEditorHandle {
       // styling as the published post (live WYSIWYG fidelity).
       attributes: { class: 'prose tiptap-editor-content' },
       handlePaste: (_view, event) => {
-        const items = (event as ClipboardEvent).clipboardData?.items;
+        const clipboard = (event as ClipboardEvent).clipboardData;
+        const items = clipboard?.items;
         if (!items) return false;
         for (const item of Array.from(items)) {
           if (item.type.startsWith('image/')) {
@@ -688,6 +778,12 @@ export function createBlogEditor(opts: BlogEditorOptions): BlogEditorHandle {
             });
             return true;
           }
+        }
+        const plain = clipboard?.getData('text/plain') || '';
+        if (looksLikeMarkdownPaste(plain)) {
+          event.preventDefault();
+          editor.chain().focus().insertContent(contentToHtml(plain)).run();
+          return true;
         }
         return false;
       },
