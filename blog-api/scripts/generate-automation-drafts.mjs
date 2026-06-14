@@ -231,9 +231,18 @@ class SQLiteStore {
     this.db = new DatabaseSync(path);
   }
   exec(sql) { this.db.exec(sql); }
-  existingSource(sourceType, sourceId) {
-    return this.db.prepare('SELECT slug, review_status FROM posts WHERE source_type = ? AND source_id = ? LIMIT 1')
-      .get(sourceType, sourceId) ?? null;
+  existingSource(sourceType, sourceId, slug = '') {
+    const id = String(sourceId || '');
+    const postSlug = String(slug || '');
+    if (!id && !postSlug) return null;
+    return this.db.prepare(`
+      SELECT slug, review_status
+      FROM posts
+      WHERE (? <> '' AND source_type = ? AND source_id = ?)
+         OR (? <> '' AND slug = ?)
+      ORDER BY CASE WHEN ? <> '' AND source_type = ? AND source_id = ? THEN 0 ELSE 1 END
+      LIMIT 1
+    `).get(id, sourceType, id, postSlug, postSlug, id, sourceType, id) ?? null;
   }
   insert(post) {
     if (dryRun) return;
@@ -272,10 +281,18 @@ class PostgresStore {
     this.pool = new Pool({ connectionString: databaseUrl });
   }
   async exec(sql) { await this.pool.query(sql); }
-  async existingSource(sourceType, sourceId) {
+  async existingSource(sourceType, sourceId, slug = '') {
+    const id = String(sourceId || '');
+    const postSlug = String(slug || '');
+    if (!id && !postSlug) return null;
     const result = await this.pool.query(
-      'SELECT slug, review_status FROM posts WHERE source_type = $1 AND source_id = $2 LIMIT 1',
-      [sourceType, sourceId],
+      `SELECT slug, review_status
+       FROM posts
+       WHERE ($2 <> '' AND source_type = $1 AND source_id = $2)
+          OR ($3 <> '' AND slug = $3)
+       ORDER BY CASE WHEN $2 <> '' AND source_type = $1 AND source_id = $2 THEN 0 ELSE 1 END
+       LIMIT 1`,
+      [sourceType, id, postSlug],
     );
     return result.rows[0] ?? null;
   }
@@ -471,6 +488,11 @@ function cveTitle(item) {
   return safeText(`[CVE] ${item.id}${products ? ` ${products}` : ''}`, 100);
 }
 
+function cvePostSlug(item) {
+  const affected = affectedProducts(item.cve);
+  return slugify(`${item.id} ${affected[0] || item.kev?.vendorProject || ''}`) || item.id.toLowerCase();
+}
+
 async function cvePost(item) {
   const cve = item.cve;
   const id = item.id;
@@ -561,7 +583,7 @@ ${refs.map(ref => `- [${ref.source || new URL(ref.url).hostname}](${ref.url})${r
   const finalTags = aiDraft.ai_generated_content ? unique([...tags, 'ai-draft']) : tags;
 
   return {
-    slug: slugify(`${id} ${affected[0] || kev?.vendorProject || ''}`) || id.toLowerCase(),
+    slug: cvePostSlug(item),
     title,
     description: `${id} ${aiDraft.ai_generated_content ? 'AI 작성' : '자동 수집'} 초안: ${desc || item.metric.severity}`,
     date: isoDate(new Date(cve.published || Date.now())),
@@ -725,7 +747,7 @@ ${items.map((item, index) => `### ${index + 1}. ${item.title}
 }
 
 async function insertIfNew(store, post) {
-  const existing = await store.existingSource(post.source_type, post.source_id);
+  const existing = await store.existingSource(post.source_type, post.source_id, post.slug);
   if (existing) return skippedResult(existing);
   await store.insert(post);
   return {
@@ -746,7 +768,7 @@ async function runCveDrafts(store, catalog) {
   const selected = rankCves(cves, kevMap(catalog));
   const results = [];
   for (const item of selected) {
-    const existing = await store.existingSource('cve', item.id);
+    const existing = await store.existingSource('cve', item.id, cvePostSlug(item));
     if (existing) {
       results.push(skippedResult(existing));
       continue;
@@ -758,7 +780,7 @@ async function runCveDrafts(store, catalog) {
 
 async function runSecurityNewsDraft(store, catalog) {
   const sourceId = `security-news:${isoDate()}`;
-  const existing = await store.existingSource('security-news', sourceId);
+  const existing = await store.existingSource('security-news', sourceId, `security-news-${isoDate()}`);
   if (existing) return { feed_items: 0, kev_items: 0, results: [skippedResult(existing)] };
 
   const feedItems = await fetchSecurityFeedItems();
