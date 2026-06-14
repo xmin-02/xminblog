@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS posts (
   tags TEXT NOT NULL DEFAULT '[]',
   draft BOOLEAN NOT NULL DEFAULT false,
   cover TEXT NOT NULL DEFAULT '',
+  cover_crop TEXT NOT NULL DEFAULT '',
   is_private BOOLEAN NOT NULL DEFAULT false,
   password_hash TEXT,
   source_type TEXT NOT NULL DEFAULT 'manual',

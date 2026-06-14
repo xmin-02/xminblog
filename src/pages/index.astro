@@ -107,6 +107,16 @@ import Heatmap from '../components/Heatmap.astro';
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
   function postUrl(slug) { return `/post/?slug=${encodeURIComponent(slug)}`; }
+  function isChannelPost(post) {
+    const category = String(post.category || '').trim().toLowerCase();
+    const source = String(post.source_type || '').trim().toLowerCase();
+    const title = String(post.title || '').trim().toLowerCase();
+    const tags = (post.tags || []).map((tag) => String(tag).trim().toLowerCase());
+    return ['cve', 'cve research', 'security-news', 'security news'].includes(category)
+      || ['cve', 'security-news'].includes(source)
+      || title.startsWith('[cve research]')
+      || tags.includes('security-news');
+  }
 
   function readTime(post) {
     const n = ((post.title || '').length + (post.description || '').length) * 6 + 600;
@@ -153,7 +163,7 @@ import Heatmap from '../components/Heatmap.astro';
       const res = await fetch(`${API_BASE}/api/posts`);
       if (!res.ok) throw new Error('api');
       const data = await res.json();
-      const posts = data.filter((p) => !p.draft && !p.is_private)
+      const posts = data.filter((p) => !p.draft && !p.is_private && !isChannelPost(p))
         .sort((a, b) => new Date(b.date) - new Date(a.date));
       renderRows(posts);
       updateCounts(posts.length);

@@ -7,7 +7,7 @@ interface Props {
   canonical?: string;
   noindex?: boolean;
   ogType?: string;
-  /** Active local-nav index: 0 home · 1 posts · 2 tags · 3 about · 4 cve · 5 security news · 6 rss. Auto-detected if omitted. */
+  /** Active local-nav index: 0 home · 1 posts · 2 CVE Research · 3 Security News · 4 tags · 5 about · 6 rss. Auto-detected if omitted. */
   active?: number;
   /** Prompt path shown on the right of the local nav, e.g. "posts/zdi-25-1055". */
   path?: string;
@@ -35,10 +35,10 @@ const pathname = Astro.url.pathname;
 function autoActive() {
   if (pathname === '/' || pathname === '') return 0;
   if (pathname.startsWith('/posts') || pathname.startsWith('/post') || pathname.startsWith('/blog')) return 1;
-  if (pathname.startsWith('/tags')) return 2;
-  if (pathname.startsWith('/about')) return 3;
-  if (pathname.startsWith('/cve')) return 4;
-  if (pathname.startsWith('/security-news')) return 5;
+  if (pathname.startsWith('/cve')) return 2;
+  if (pathname.startsWith('/security-news')) return 3;
+  if (pathname.startsWith('/tags')) return 4;
+  if (pathname.startsWith('/about')) return 5;
   if (pathname.startsWith('/rss')) return 6;
   return -1;
 }
@@ -53,10 +53,10 @@ const sites = [
 const local = [
   ['home', '/'],
   ['posts', '/posts'],
+  ['CVE Research', '/cve'],
+  ['Security News', '/security-news'],
   ['tags', '/tags'],
   ['about', '/about'],
-  ['cve', '/cve'],
-  ['security news', '/security-news'],
   ['rss', '/rss.xml'],
 ];
 

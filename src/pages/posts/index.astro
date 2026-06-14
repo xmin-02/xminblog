@@ -163,6 +163,28 @@ import Layout from '../../layouts/Layout.astro';
   function categoryUrl(category){return category ? `/posts?category=${encodeURIComponent(category)}` : '/posts';}
   function fmtDate(d){try{return new Date(d).toISOString().slice(0,10);}catch{return'';}}
   function shortDate(d){try{return new Date(d).toLocaleDateString('ko-KR',{month:'short',day:'numeric'});}catch{return'';}}
+  function normalizeCoverCrop(raw){
+    if(!raw) return {x:50,y:50,zoom:1};
+    let value=raw;
+    if(typeof raw==='string'){try{value=JSON.parse(raw);}catch{value={};}}
+    const clamp=(v,min,max,fallback)=>{const n=Number(v);return Number.isFinite(n)?Math.min(max,Math.max(min,n)):fallback;};
+    return {x:clamp(value?.x,0,100,50),y:clamp(value?.y,0,100,50),zoom:clamp(value?.zoom,1,3,1)};
+  }
+  function coverCropStyle(raw){
+    const c=normalizeCoverCrop(raw);
+    const x=c.x.toFixed(2), y=c.y.toFixed(2), z=c.zoom.toFixed(2);
+    return `object-position:${x}% ${y}%;transform:scale(${z});transform-origin:${x}% ${y}%;`;
+  }
+  function isChannelPost(post){
+    const category=String(post.category||'').trim().toLowerCase();
+    const source=String(post.source_type||'').trim().toLowerCase();
+    const title=String(post.title||'').trim().toLowerCase();
+    const tags=(post.tags||[]).map(tag=>String(tag).trim().toLowerCase());
+    return ['cve','cve research','security-news','security news'].includes(category)
+      || ['cve','security-news'].includes(source)
+      || title.startsWith('[cve research]')
+      || tags.includes('security-news');
+  }
 
   // representative image: explicit cover, else the post's first body image (derived async)
   function thumbOf(p){ return p.cover || p._thumb || ''; }
@@ -194,7 +216,7 @@ import Layout from '../../layouts/Layout.astro';
       const cover=thumbOf(p);
       const tags=(p.tags||[]).slice(0,3).map(t=>`<span class="v11-tag ${a}">#${esc(t)}</span>`).join('');
       const thumb=cover
-        ? `<div class="pi-thumb"><img src="${esc(cover)}" alt="${esc(p.coverAlt||p.title)}" loading="lazy" decoding="async"/></div>`
+        ? `<div class="pi-thumb"><img src="${esc(cover)}" alt="${esc(p.coverAlt||p.title)}" loading="lazy" decoding="async" style="${coverCropStyle(p.cover_crop)}"/></div>`
         : '';
       const priv=p.is_private?'<span class="lvl lvl-warn" style="font-size:10px;">priv</span>':'';
       return `<a href="${postUrl(p.slug)}" class="v11-post-item" data-slug="${esc(p.slug)}">
@@ -282,7 +304,7 @@ import Layout from '../../layouts/Layout.astro';
       const res=await fetch(`${API_BASE}/api/posts`);
       if(!res.ok) throw new Error('api');
       const data=await res.json();
-      allPosts=data.filter(p=>!p.draft&&!p.is_private).sort((a,b)=>new Date(b.date)-new Date(a.date));
+      allPosts=data.filter(p=>!p.draft&&!p.is_private&&!isChannelPost(p)).sort((a,b)=>new Date(b.date)-new Date(a.date));
       renderPage();
       if(await deriveThumbs(visiblePosts())) renderPage(); // re-render once derived thumbnails are known
     }catch(e){

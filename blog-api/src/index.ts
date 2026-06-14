@@ -356,6 +356,7 @@ interface PostMeta {
   title: string; description: string; date: string;
   category: string; tags: string[]; draft: boolean;
   cover?: string;
+  cover_crop?: unknown;
   is_private?: boolean;
   password_hash?: string;
   source_type?: string;
@@ -375,6 +376,8 @@ function buildMarkdown(meta: PostMeta, body: string): string {
     ? `\ntags: [${meta.tags.map(t => `"${t}"`).join(', ')}]`
     : '\ntags: []';
   const cover = meta.cover ? `\ncover: "${meta.cover.replace(/"/g, '\\"')}"` : '';
+  const coverCropValue = cleanCoverCrop(meta.cover_crop);
+  const coverCrop = coverCropValue ? `\ncover_crop: '${coverCropValue.replace(/'/g, "''")}'` : '';
   const privateFields = meta.is_private
     ? `\nis_private: true${meta.password_hash ? `\npassword_hash: "${meta.password_hash.replace(/"/g, '\\"')}"` : ''}`
     : '';
@@ -391,7 +394,7 @@ title: "${meta.title.replace(/"/g, '\\"')}"
 description: "${meta.description.replace(/"/g, '\\"')}"
 date: ${meta.date}
 category: "${meta.category.replace(/"/g, '\\"')}"${tags}
-draft: ${meta.draft}${cover}${privateFields}${reviewFields}
+draft: ${meta.draft}${cover}${coverCrop}${privateFields}${reviewFields}
 ---
 
 ${body.trimStart()}
@@ -424,6 +427,7 @@ function parseFrontmatter(raw: string): { meta: Partial<PostMeta>; body: string 
   meta.tags = arr('tags');
   meta.draft = bool('draft') ?? false;
   meta.cover = str('cover');
+  meta.cover_crop = str('cover_crop');
   meta.is_private = bool('is_private') ?? false;
   meta.password_hash = str('password_hash');
   meta.source_type = str('source_type');
@@ -508,6 +512,56 @@ function cleanSourceUrl(value: unknown): string {
   return url;
 }
 
+type CoverCrop = { x: number; y: number; zoom: number };
+
+const DEFAULT_COVER_CROP: CoverCrop = { x: 50, y: 50, zoom: 1 };
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function roundCropNumber(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function parseCoverCrop(value: unknown): CoverCrop | null {
+  if (value == null || value === '') return null;
+  let raw = value;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    try {
+      raw = JSON.parse(trimmed);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const crop = {
+    x: roundCropNumber(clampNumber(record.x, 0, 100, DEFAULT_COVER_CROP.x)),
+    y: roundCropNumber(clampNumber(record.y, 0, 100, DEFAULT_COVER_CROP.y)),
+    zoom: roundCropNumber(clampNumber(record.zoom, 1, 3, DEFAULT_COVER_CROP.zoom)),
+  };
+  if (
+    crop.x === DEFAULT_COVER_CROP.x
+    && crop.y === DEFAULT_COVER_CROP.y
+    && crop.zoom === DEFAULT_COVER_CROP.zoom
+  ) return null;
+  return crop;
+}
+
+function cleanCoverCrop(value: unknown): string {
+  const crop = parseCoverCrop(value);
+  return crop ? JSON.stringify(crop) : '';
+}
+
+function coverCropFromStored(value: unknown): CoverCrop | null {
+  return parseCoverCrop(value);
+}
+
 function reviewMetaFromRow(row: any) {
   return {
     source_type: row.source_type ?? 'manual',
@@ -544,6 +598,7 @@ function dbPostSummary(row: any, includeReview = false) {
     tags: postTags(row.tags),
     draft: dbBool(row.draft),
     cover: row.cover ?? '',
+    cover_crop: coverCropFromStored(row.cover_crop),
     is_private: dbBool(row.is_private),
   };
   return includeReview ? { ...summary, ...reviewMetaFromRow(row) } : summary;
@@ -559,6 +614,7 @@ function publicPostSummary(slug: string, meta: Partial<PostMeta>) {
     tags: meta.tags ?? [],
     draft: meta.draft ?? false,
     cover: meta.cover ?? '',
+    cover_crop: coverCropFromStored(meta.cover_crop),
     is_private: meta.is_private ?? false,
   };
 }
@@ -1501,8 +1557,8 @@ async function listPosts(request: Request, env: Env, origin: string | null): Pro
   if (contentBackend(env) === 'db') {
     const rows = await env.DB.prepare(
       isAdmin
-        ? `SELECT slug, title, description, date, category, tags, draft, cover, is_private, source_type, source_url, source_id, auto_generated, review_status, reviewed_at, updated_at FROM posts ORDER BY date DESC, created_at DESC`
-        : `SELECT slug, title, description, date, category, tags, draft, cover, is_private FROM posts WHERE draft = ? AND is_private = ? ORDER BY date DESC, created_at DESC`,
+        ? `SELECT slug, title, description, date, category, tags, draft, cover, cover_crop, is_private, source_type, source_url, source_id, auto_generated, review_status, reviewed_at, updated_at FROM posts ORDER BY date DESC, created_at DESC`
+        : `SELECT slug, title, description, date, category, tags, draft, cover, cover_crop, is_private FROM posts WHERE draft = ? AND is_private = ? ORDER BY date DESC, created_at DESC`,
     );
     const result = isAdmin ? await rows.all<any>() : await rows.bind(false, false).all<any>();
     return json((result.results ?? []).map(row => dbPostSummary(row, isAdmin)), 200, origin);
@@ -1640,7 +1696,7 @@ async function readPostFile(slug: string, env: Env): Promise<{ file: GHFile; met
 
 async function readPostRow(slug: string, env: Env): Promise<any | null> {
   return env.DB.prepare(
-    `SELECT slug, title, description, date, category, tags, draft, cover, is_private, password_hash, source_type, source_url, source_id, auto_generated, review_status, reviewed_at, content, created_at, updated_at FROM posts WHERE slug = ?`,
+    `SELECT slug, title, description, date, category, tags, draft, cover, cover_crop, is_private, password_hash, source_type, source_url, source_id, auto_generated, review_status, reviewed_at, content, created_at, updated_at FROM posts WHERE slug = ?`,
   ).bind(slug).first<any>();
 }
 
@@ -1740,8 +1796,8 @@ async function createPost(payload: PostPayload, env: Env, origin: string | null,
     if (existing) return json({ error: `Post "${slug}" already exists` }, 409, origin);
 
     await env.DB.prepare(`
-      INSERT INTO posts (slug, title, description, date, category, tags, draft, cover, is_private, password_hash, source_type, source_url, source_id, auto_generated, review_status, reviewed_at, content, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO posts (slug, title, description, date, category, tags, draft, cover, cover_crop, is_private, password_hash, source_type, source_url, source_id, auto_generated, review_status, reviewed_at, content, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       slug,
       payload.title,
@@ -1751,6 +1807,7 @@ async function createPost(payload: PostPayload, env: Env, origin: string | null,
       JSON.stringify(payload.tags ?? []),
       !!payload.draft,
       payload.cover ?? '',
+      cleanCoverCrop(payload.cover_crop),
       !!payload.is_private,
       payload.password_hash ?? null,
       reviewMeta.source_type,
@@ -1826,7 +1883,7 @@ async function updatePost(slug: string, payload: PostPayload, env: Env, origin: 
 
     await env.DB.prepare(`
       UPDATE posts
-      SET title = ?, description = ?, date = ?, category = ?, tags = ?, draft = ?, cover = ?, is_private = ?, password_hash = ?, source_type = ?, source_url = ?, source_id = ?, auto_generated = ?, review_status = ?, reviewed_at = ?, content = ?, updated_at = ?
+      SET title = ?, description = ?, date = ?, category = ?, tags = ?, draft = ?, cover = ?, cover_crop = ?, is_private = ?, password_hash = ?, source_type = ?, source_url = ?, source_id = ?, auto_generated = ?, review_status = ?, reviewed_at = ?, content = ?, updated_at = ?
       WHERE slug = ?
     `).bind(
       payload.title,
@@ -1836,6 +1893,7 @@ async function updatePost(slug: string, payload: PostPayload, env: Env, origin: 
       JSON.stringify(payload.tags ?? []),
       !!payload.draft,
       payload.cover ?? '',
+      cleanCoverCrop(payload.cover_crop),
       !!payload.is_private,
       payload.password_hash ?? null,
       reviewMeta.source_type,
@@ -1929,7 +1987,7 @@ async function listReviewPosts(request: Request, env: Env, origin: string | null
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 100);
 
   const baseSelect = `
-    SELECT slug, title, description, date, category, tags, draft, cover, is_private,
+    SELECT slug, title, description, date, category, tags, draft, cover, cover_crop, is_private,
       source_type, source_url, source_id, auto_generated, review_status, reviewed_at, updated_at
     FROM posts
   `;
@@ -1985,6 +2043,7 @@ async function updateReviewPost(slug: string, request: Request, env: Env, origin
     tags: body.tags ?? postTags(existing.tags),
     draft: body.draft ?? dbBool(existing.draft),
     cover: body.cover ?? existing.cover ?? '',
+    cover_crop: body.cover_crop ?? existing.cover_crop ?? '',
     is_private: body.is_private ?? dbBool(existing.is_private),
     private_password: body.private_password,
     content: body.content ?? existing.content ?? '',

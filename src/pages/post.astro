@@ -52,7 +52,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
         <!-- Recent posts -->
         <div class="sidebar-widget">
-          <p class="sidebar-widget-title">최근 글</p>
+          <p class="sidebar-widget-title" id="sidebar-recent-title">최근 글</p>
           <ul id="sidebar-recent" class="space-y-2.5">
             <li class="text-xs text-[var(--color-text-secondary)]">불러오는 중...</li>
           </ul>
@@ -92,13 +92,50 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     overflow: hidden;
     border: 1px solid var(--color-border);
     background: var(--color-bg-secondary);
+    aspect-ratio: 16 / 7;
+    max-height: 360px;
   }
   .post-cover img {
     display: block;
     width: 100%;
-    height: auto;
-    max-height: 360px;
+    height: 100%;
     object-fit: cover;
+    will-change: transform;
+  }
+
+  .edit-cover-preview {
+    position: relative;
+    aspect-ratio: 16 / 7;
+    overflow: hidden;
+  }
+  .edit-cover-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    will-change: transform;
+  }
+  .edit-cover-crop-controls {
+    display: grid;
+    gap: 0.65rem;
+    padding: 0.8rem 0.75rem 0.2rem;
+  }
+  .edit-cover-crop-row {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr) 3.2rem;
+    gap: 0.65rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+  }
+  .edit-cover-crop-row input[type="range"] {
+    width: 100%;
+    accent-color: var(--color-accent);
+  }
+  .edit-cover-crop-value {
+    text-align: right;
+    color: var(--color-text);
   }
 
   /* ── Inline editor ── */
@@ -404,6 +441,45 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   function esc(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  const DEFAULT_COVER_CROP = { x: 50, y: 50, zoom: 1 };
+
+  function clampCoverNumber(value, min, max, fallback) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, parsed));
+  }
+
+  function normalizeCoverCrop(raw) {
+    if (!raw) return { ...DEFAULT_COVER_CROP };
+    let value = raw;
+    if (typeof raw === 'string') {
+      try { value = JSON.parse(raw); } catch { value = {}; }
+    }
+    return {
+      x: clampCoverNumber(value?.x, 0, 100, DEFAULT_COVER_CROP.x),
+      y: clampCoverNumber(value?.y, 0, 100, DEFAULT_COVER_CROP.y),
+      zoom: clampCoverNumber(value?.zoom, 1, 3, DEFAULT_COVER_CROP.zoom),
+    };
+  }
+
+  function isDefaultCoverCrop(crop) {
+    const c = normalizeCoverCrop(crop);
+    return c.x === DEFAULT_COVER_CROP.x && c.y === DEFAULT_COVER_CROP.y && c.zoom === DEFAULT_COVER_CROP.zoom;
+  }
+
+  function coverCropStyle(raw) {
+    const crop = normalizeCoverCrop(raw);
+    const x = crop.x.toFixed(2);
+    const y = crop.y.toFixed(2);
+    const zoom = crop.zoom.toFixed(2);
+    return `object-position:${x}% ${y}%;transform:scale(${zoom});transform-origin:${x}% ${y}%;`;
+  }
+
+  function postCoverHtml(post) {
+    if (!post?.cover) return '';
+    return `<div class="post-cover"><img src="${esc(post.cover)}" alt="${esc(post.title)}" loading="eager" style="${coverCropStyle(post.cover_crop)}" /></div>`;
   }
 
   let _categoryOptions = [];
@@ -1039,24 +1115,35 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return `/post/?slug=${encodeURIComponent(slug)}`;
   }
 
-  async function populateRecentSidebar(excludeSlug) {
+  async function populateRecentSidebar(excludeSlug, options = {}) {
     const recentEl = document.getElementById('sidebar-recent');
     if (!recentEl) return;
+    const includeDrafts = !!options.includeDrafts;
+    const titleEl = document.getElementById('sidebar-recent-title');
+    if (titleEl) titleEl.textContent = includeDrafts ? '최근 글 / 임시저장' : '최근 글';
     try {
       const token = localStorage.getItem('auth_token');
       const res = await fetch(`${API_BASE}/api/posts`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) throw new Error('api');
       const posts = (await res.json())
-        .filter(p => !p.draft && !p.is_private && p.slug !== excludeSlug)
+        .filter(p => p.slug !== excludeSlug)
+        .filter(p => includeDrafts ? (p.draft || (!p.draft && !p.is_private)) : (!p.draft && !p.is_private))
+        .sort((a, b) => {
+          if (includeDrafts && !!b.draft !== !!a.draft) return Number(b.draft) - Number(a.draft);
+          const bd = new Date(b.updated_at ? Number(b.updated_at) * 1000 : b.date).getTime();
+          const ad = new Date(a.updated_at ? Number(a.updated_at) * 1000 : a.date).getTime();
+          return (Number.isFinite(bd) ? bd : 0) - (Number.isFinite(ad) ? ad : 0);
+        })
         .slice(0, 5);
       if (!posts.length) {
-        recentEl.innerHTML = '<li class="text-xs text-[var(--color-text-secondary)]">아직 글이 없습니다.</li>';
+        recentEl.innerHTML = `<li class="text-xs text-[var(--color-text-secondary)]">${includeDrafts ? '이어 쓸 임시저장 글이 없습니다.' : '아직 글이 없습니다.'}</li>`;
         return;
       }
       recentEl.innerHTML = posts.map(p => {
         const d = p.date ? new Date(p.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
+        const draft = p.draft ? '<span class="lvl lvl-warn" style="font-size:9.5px;margin-left:4px;">draft</span>' : '';
         return `<li><a href="${postUrl(p.slug)}" class="block group">
-          <p class="text-xs font-medium text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors line-clamp-2 leading-snug">${esc(p.title)}</p>
+          <p class="text-xs font-medium text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors line-clamp-2 leading-snug">${esc(p.title)}${draft}</p>
           <p class="text-xs text-[var(--color-text-secondary)] mt-0.5">${esc(d)}</p>
         </a></li>`;
       }).join('');
@@ -1097,11 +1184,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       if (!(await requireAdminForEdit())) return;
       _isNewPost = true;
       _currentSlug = '';
-      _currentPost = { title: '', description: '', content: '', category: '', tags: [], date: new Date().toISOString().slice(0, 10), draft: false, cover: '', is_private: false };
+      _currentPost = { title: '', description: '', content: '', category: '', tags: [], date: new Date().toISOString().slice(0, 10), draft: false, cover: '', cover_crop: null, is_private: false };
       document.title = '새 글 작성 — xmin.blog';
       container.innerHTML = '<article></article>';
       if (commentsSection) commentsSection.style.display = 'none';
-      populateRecentSidebar('');
+      populateRecentSidebar('', { includeDrafts: true });
       await enterEditMode(true);
       return;
     }
@@ -1159,7 +1246,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
       container.innerHTML = `
         <article>
-          ${post.cover ? `<div class="post-cover"><img src="${esc(post.cover)}" alt="${esc(post.title)}" loading="eager" /></div>` : ''}
+          ${postCoverHtml(post)}
           <header class="mb-10 pb-8 border-b border-[var(--color-border)]">
             <div class="flex flex-wrap items-center gap-2 mb-4" style="font-family: var(--font-mono);">
               ${post.category ? `<a href="/?category=${encodeURIComponent(post.category)}" class="text-xs font-medium transition-colors" style="color:var(--color-accent);">[${esc(post.category)}]</a>` : ''}
@@ -1406,6 +1493,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const tagsStr = (post.tags || []).join(', ');
     const dateVal = post.date ? post.date.slice(0, 10) : new Date().toISOString().slice(0, 10);
     const categoryOptions = await loadCategoryOptions(post.category || '');
+    const coverCrop = normalizeCoverCrop(post.cover_crop);
 
     container.innerHTML = `
       <article>
@@ -1487,8 +1575,26 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             </div>
           </div>
           <div id="edit-cover-status" class="text-xs mb-2" style="min-height:1rem;color:var(--color-text-secondary);">여기에 이미지를 드래그 앤 드랍해도 대표 이미지로 첨부됩니다.</div>
-          <div id="edit-cover-preview" class="rounded-lg overflow-hidden border border-[var(--color-border)]" style="display:${post.cover ? 'block' : 'none'};background:var(--color-bg-secondary);">
-            <img id="edit-cover-img" src="${esc(post.cover || '')}" alt="대표 이미지 미리보기" style="width:100%;max-height:220px;object-fit:cover;display:block;" />
+          <div id="edit-cover-preview" class="edit-cover-preview rounded-lg border border-[var(--color-border)]" style="display:${post.cover ? 'block' : 'none'};background:var(--color-bg-secondary);">
+            <img id="edit-cover-img" src="${esc(post.cover || '')}" alt="대표 이미지 미리보기" style="${coverCropStyle(coverCrop)}" />
+          </div>
+          <div id="edit-cover-crop-controls" class="edit-cover-crop-controls" style="display:${post.cover ? 'grid' : 'none'};">
+            <div class="edit-cover-crop-row">
+              <label for="edit-cover-zoom">확대</label>
+              <input id="edit-cover-zoom" type="range" min="1" max="3" step="0.01" value="${coverCrop.zoom}" oninput="syncCoverCropPreview()" />
+              <span id="edit-cover-zoom-value" class="edit-cover-crop-value">${Math.round(coverCrop.zoom * 100)}%</span>
+            </div>
+            <div class="edit-cover-crop-row">
+              <label for="edit-cover-x">가로</label>
+              <input id="edit-cover-x" type="range" min="0" max="100" step="1" value="${coverCrop.x}" oninput="syncCoverCropPreview()" />
+              <span id="edit-cover-x-value" class="edit-cover-crop-value">${Math.round(coverCrop.x)}%</span>
+            </div>
+            <div class="edit-cover-crop-row">
+              <label for="edit-cover-y">세로</label>
+              <input id="edit-cover-y" type="range" min="0" max="100" step="1" value="${coverCrop.y}" oninput="syncCoverCropPreview()" />
+              <span id="edit-cover-y-value" class="edit-cover-crop-value">${Math.round(coverCrop.y)}%</span>
+            </div>
+            <button type="button" class="edit-cancel-btn" style="justify-self:start;padding:0.35rem 0.65rem;" onclick="resetCoverCrop()">중앙으로</button>
           </div>
         </div>
 
@@ -1526,7 +1632,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     });
 
     document.getElementById('edit-cover')?.addEventListener('input', event => {
-      updateCoverPreview(event.target.value.trim());
+      updateCoverPreview(event.target.value.trim(), { keepCrop: true });
     });
     setupCategoryInput();
     setupCoverDropZone();
@@ -1616,23 +1722,68 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     });
   }
 
-  function updateCoverPreview(url) {
+  function coverCropFromControls() {
+    return normalizeCoverCrop({
+      x: document.getElementById('edit-cover-x')?.value,
+      y: document.getElementById('edit-cover-y')?.value,
+      zoom: document.getElementById('edit-cover-zoom')?.value,
+    });
+  }
+
+  function setCoverCropControlsVisible(visible) {
+    const controls = document.getElementById('edit-cover-crop-controls');
+    if (controls) controls.style.display = visible ? 'grid' : 'none';
+  }
+
+  function setCoverCropControls(crop) {
+    const c = normalizeCoverCrop(crop);
+    const x = document.getElementById('edit-cover-x');
+    const y = document.getElementById('edit-cover-y');
+    const zoom = document.getElementById('edit-cover-zoom');
+    if (x) x.value = String(Math.round(c.x));
+    if (y) y.value = String(Math.round(c.y));
+    if (zoom) zoom.value = String(c.zoom);
+    syncCoverCropPreview();
+  }
+
+  function syncCoverCropPreview() {
+    const img = document.getElementById('edit-cover-img');
+    const crop = coverCropFromControls();
+    if (img) img.style.cssText = coverCropStyle(crop);
+    const xValue = document.getElementById('edit-cover-x-value');
+    const yValue = document.getElementById('edit-cover-y-value');
+    const zoomValue = document.getElementById('edit-cover-zoom-value');
+    if (xValue) xValue.textContent = `${Math.round(crop.x)}%`;
+    if (yValue) yValue.textContent = `${Math.round(crop.y)}%`;
+    if (zoomValue) zoomValue.textContent = `${Math.round(crop.zoom * 100)}%`;
+  }
+
+  function resetCoverCrop() {
+    setCoverCropControls(DEFAULT_COVER_CROP);
+  }
+
+  function updateCoverPreview(url, options = {}) {
     const preview = document.getElementById('edit-cover-preview');
     const img = document.getElementById('edit-cover-img');
     if (!preview || !img) return;
     if (!url) {
       preview.style.display = 'none';
       img.removeAttribute('src');
+      setCoverCropControlsVisible(false);
       return;
     }
     img.src = url;
     preview.style.display = 'block';
+    setCoverCropControlsVisible(true);
+    if (!options.keepCrop) setCoverCropControls(DEFAULT_COVER_CROP);
+    else syncCoverCropPreview();
   }
 
   function clearCoverImage() {
     const input = document.getElementById('edit-cover');
     if (input) input.value = '';
     updateCoverPreview('');
+    resetCoverCrop();
     setCoverUploadStatus('');
   }
 
@@ -1725,6 +1876,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const tags = (document.getElementById('edit-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean);
     const draft = document.getElementById('edit-draft')?.checked ?? false;
     const cover = document.getElementById('edit-cover')?.value.trim() || '';
+    const cover_crop = cover && !isDefaultCoverCrop(coverCropFromControls()) ? coverCropFromControls() : null;
     const is_private = document.getElementById('edit-private')?.checked ?? false;
     const private_password = document.getElementById('edit-password')?.value || '';
     const content = (_editor ? _editor.getMarkdown() : '').trim();
@@ -1752,7 +1904,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     status.textContent = '';
     const token = localStorage.getItem('auth_token');
 
-    const body = { title, description, date, category, tags, draft, cover, content, is_private };
+    const body = { title, description, date, category, tags, draft, cover, cover_crop, content, is_private };
     if (private_password) body.private_password = private_password;
 
     try {

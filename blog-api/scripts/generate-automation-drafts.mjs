@@ -552,7 +552,7 @@ function cveTitle(item) {
   const products = item.kev
     ? [item.kev.vendorProject, item.kev.product].filter(Boolean).join(' ')
     : affectedProducts(item.cve)[0] || '';
-  return safeText(`[CVE] ${item.id}${products ? ` ${products}` : ''}`, 100);
+  return safeText(`[CVE Research] ${item.id}${products ? ` ${products}` : ''}`, 120);
 }
 
 function cvePostSlug(item) {
@@ -674,7 +674,7 @@ ${refs.map(ref => `- [${ref.source || new URL(ref.url).hostname}](${ref.url})${r
     title,
     description: oneLineDescription,
     date: isoDate(new Date(cve.published || Date.now())),
-    category: 'cve',
+    category: 'CVE Research',
     tags: finalTags,
     draft: true,
     cover: '',
@@ -822,7 +822,7 @@ ${items.length ? items.map((item, index) => `### ${index + 1}. ${item.title}
       ? `${window.startDate} 09시부터 ${window.endDate} 08시 59분까지 수집한 보안뉴스 ${items.length}건 브리핑입니다.`
       : `${window.startDate} 09시부터 ${window.endDate} 08시 59분까지 수집된 신규 보안뉴스는 없습니다.`,
     date: today,
-    category: 'security-news',
+    category: 'Security News',
     tags: aiDraft.ai_generated_content
       ? ['security-news', 'automation', 'daily-brief', 'ai-draft']
       : ['security-news', 'automation', 'daily-brief'],

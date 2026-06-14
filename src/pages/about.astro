@@ -11,34 +11,8 @@ const idRows: Array<[string, string, string?, string?]> = [
   ['creed', '공격자 관점에서 검증하기'],
 ];
 
-// Real box-drawing card rendered in D2Coding (Hangul = exactly 2 mono cells),
-// so columns padded by visual width line up — every │ ╭ ╮ ╰ ╯ ─ is a real glyph.
-const ID_INNER = 40; // visual columns between the two side pipes
-const wideRe = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/;
-function vlen(s: string): number {
-  let w = 0;
-  for (const ch of s) w += wideRe.test(ch) ? 2 : 1;
-  return w;
-}
-// line = "│ " + label(8) + "· " + value + pad + " │" → inner width must equal ID_INNER
-function idPad(value: string): number {
-  return Math.max(0, ID_INNER - 12 - vlen(value));
-}
-function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-const idLine = '─'.repeat(ID_INNER);
-let idCardHtml = `<span class="v11-dim">╭${idLine}╮</span>\n`;
-for (const [k, v, c, href] of idRows) {
-  const cls = c ? `v11-${c}` : '';
-  const val = href
-    ? `<a href="${href}" class="${cls}">${esc(v)}</a>`
-    : `<span class="${cls}">${esc(v)}</span>`;
-  idCardHtml += `<span class="v11-dim">│ ${k.padEnd(8)}· </span>`
-    + `${val}${' '.repeat(idPad(v))}`
-    + `<span class="v11-dim"> │</span>\n`;
-}
-idCardHtml += `<span class="v11-dim">╰${idLine}╯</span>`;
+const idRule = '-'.repeat(48);
+const idCardWidth = `${idRule.length + 2}ch`;
 
 const timeline = [
   ['2026', '벨루가 인턴 — RAG 챗봇 고도화', 'green'],
@@ -48,11 +22,29 @@ const timeline = [
 ];
 ---
 
-<Layout title="소개 — xmin.blog" description="주수민의 보안 리서치 노트 — 퍼징, 바이너리 분석, AI" active={3} path="about" maxWidth={960}>
+<Layout title="소개 — xmin.blog" description="주수민의 보안 리서치 노트 — 퍼징, 바이너리 분석, AI" active={5} path="about" maxWidth={960}>
   <div class="v11-about-grid" style="padding-top:34px;padding-bottom:34px;">
     <div>
       <div class="v11-dim" style="font-size:12px;margin-bottom:6px;"><span class="v11-gr">$</span> whoami --verbose</div>
-      <pre class="v11-idcard" set:html={idCardHtml}></pre>
+      <div class="v11-idcard" aria-label="주수민 소개" style={`--id-card-width:${idCardWidth}`}>
+        <div class="v11-idcard-rule">
+          <span class="v11-idcard-pipe">+</span><span class="v11-idcard-dash">{idRule}</span><span class="v11-idcard-pipe">+</span>
+        </div>
+        {idRows.map(([k, v, c, href]) => (
+          <div class="v11-idcard-row">
+            <span class="v11-idcard-pipe">|</span>
+            <span class="v11-idcard-key">{k}</span>
+            <span class="v11-idcard-dot">·</span>
+            <span class="v11-idcard-value">
+              {href ? <a href={href} class={c ? `v11-${c}` : ''}>{v}</a> : <span class={c ? `v11-${c}` : ''}>{v}</span>}
+            </span>
+            <span class="v11-idcard-pipe">|</span>
+          </div>
+        ))}
+        <div class="v11-idcard-rule">
+          <span class="v11-idcard-pipe">+</span><span class="v11-idcard-dash">{idRule}</span><span class="v11-idcard-pipe">+</span>
+        </div>
+      </div>
 
       <p class="v11-sans" style="font-size:15.5px;color:var(--color-text);line-height:1.85;margin:0;">
         공격자 관점에서 시스템을 살피고, <strong style="color:var(--color-fg);">퍼징·바이너리 분석</strong>으로 취약점을 추적합니다.
@@ -130,18 +122,51 @@ const timeline = [
 
 <style>
   .v11-about-grid { display: grid; grid-template-columns: 1fr 300px; gap: 48px; }
+  .v11-about-grid > * { min-width: 0; }
 
-  /* identity card: D2Coding (2-cell Hangul) → box-drawing aligns by char count */
   .v11-idcard {
     margin: 4px 0 18px;
     font-family: 'D2Coding', 'JetBrains Mono', ui-monospace, monospace;
     font-size: 14px;
     line-height: 1.4;
     color: var(--color-text);
-    white-space: pre;
-    overflow-x: auto;
-    display: inline-block;
+    display: grid;
+    grid-template-columns: minmax(0, 100%);
+    width: min(var(--id-card-width), calc(100vw - 36px));
     max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .v11-idcard-rule,
+  .v11-idcard-row {
+    display: grid;
+    align-items: baseline;
+    min-width: 0;
+  }
+  .v11-idcard-rule {
+    grid-template-columns: 1ch minmax(0, 1fr) 1ch;
+  }
+  .v11-idcard-row {
+    grid-template-columns: 1ch 8ch 2ch minmax(0, 1fr) 1ch;
+  }
+  .v11-idcard-pipe,
+  .v11-idcard-dash,
+  .v11-idcard-key,
+  .v11-idcard-dot {
+    color: var(--color-dim);
+  }
+  .v11-idcard-dash {
+    overflow: hidden;
+    text-overflow: clip;
+  }
+  .v11-idcard-key {
+    padding-left: 1.35ch;
+  }
+  .v11-idcard-value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-text);
   }
   .v11-skills {
     font-size: 12.5px; line-height: 1.95; margin: 8px 0 0;
@@ -165,5 +190,10 @@ const timeline = [
   .v11-w64 { display: inline-block; width: 64px; }
   @media (max-width: 720px) {
     .v11-about-grid { grid-template-columns: 1fr; gap: 28px; }
+  }
+  @media (max-width: 520px) {
+    .v11-idcard { font-size: 12.5px; width: min(var(--id-card-width), calc(100vw - 36px)); }
+    .v11-idcard-row { grid-template-columns: 1ch 7ch 2ch minmax(0, 1fr) 1ch; }
+    .v11-idcard-key { padding-left: 0.8ch; }
   }
 </style>

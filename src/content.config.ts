@@ -13,6 +13,14 @@ const blog = defineCollection({
     is_private: z.boolean().default(false),
     password_hash: z.string().optional(),
     cover: z.string().optional(),       // 썸네일/히어로 이미지 경로
+    cover_crop: z.union([
+      z.string(),
+      z.object({
+        x: z.number().optional(),
+        y: z.number().optional(),
+        zoom: z.number().optional(),
+      }),
+    ]).optional(),
     coverAlt: z.string().optional(),    // a11y: cover alt text (없으면 빌드 경고)
   }),
 });

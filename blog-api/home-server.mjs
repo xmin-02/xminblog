@@ -199,6 +199,20 @@ async function initDb(db) {
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS auto_generated BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS review_status TEXT NOT NULL DEFAULT 'published';
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS reviewed_at BIGINT;
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS cover_crop TEXT NOT NULL DEFAULT '';
+      UPDATE posts
+      SET category = 'CVE Research',
+          title = CASE
+            WHEN title LIKE '[CVE] %' THEN '[CVE Research] ' || substring(title from 7)
+            ELSE title
+          END,
+          updated_at = extract(epoch from now())::bigint
+      WHERE lower(category) = 'cve'
+         OR title LIKE '[CVE] %';
+      UPDATE posts
+      SET category = 'Security News',
+          updated_at = extract(epoch from now())::bigint
+      WHERE lower(category) IN ('security-news', 'security news');
       CREATE INDEX IF NOT EXISTS idx_posts_review ON posts(review_status, draft, updated_at);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_source_id ON posts(source_type, source_id) WHERE source_id <> '';
     `);
@@ -221,6 +235,24 @@ async function initDb(db) {
   addPostColumn('auto_generated', 'ALTER TABLE posts ADD COLUMN auto_generated INTEGER NOT NULL DEFAULT 0;');
   addPostColumn('review_status', "ALTER TABLE posts ADD COLUMN review_status TEXT NOT NULL DEFAULT 'published';");
   addPostColumn('reviewed_at', 'ALTER TABLE posts ADD COLUMN reviewed_at INTEGER;');
+  addPostColumn('cover_crop', "ALTER TABLE posts ADD COLUMN cover_crop TEXT NOT NULL DEFAULT '';");
+  db.exec(`
+    UPDATE posts
+    SET category = 'CVE Research',
+        title = CASE
+          WHEN title LIKE '[CVE] %' THEN '[CVE Research] ' || substr(title, 7)
+          ELSE title
+        END,
+        updated_at = unixepoch()
+    WHERE lower(category) = 'cve'
+       OR title LIKE '[CVE] %';
+  `);
+  db.exec(`
+    UPDATE posts
+    SET category = 'Security News',
+        updated_at = unixepoch()
+    WHERE lower(category) IN ('security-news', 'security news');
+  `);
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_posts_review ON posts(review_status, draft, updated_at);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_source_id ON posts(source_type, source_id) WHERE source_id <> '';

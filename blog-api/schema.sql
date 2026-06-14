@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS posts (
   tags TEXT NOT NULL DEFAULT '[]',
   draft INTEGER NOT NULL DEFAULT 0,
   cover TEXT NOT NULL DEFAULT '',
+  cover_crop TEXT NOT NULL DEFAULT '',
   is_private INTEGER NOT NULL DEFAULT 0,
   password_hash TEXT,
   source_type TEXT NOT NULL DEFAULT 'manual',
