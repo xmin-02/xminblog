@@ -1,15 +1,12 @@
 [Unit]
 Description=xmin.blog automation draft generator
-After=network-online.target postgresql.service
+After=network-online.target docker.service
 Wants=network-online.target
+Requires=docker.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/srv/xminblog/blog-api
-EnvironmentFile=/srv/xminblog/blog-api/.env.home
-ExecStart=/usr/bin/npm run automate:drafts
-User=xminblog
-Group=xminblog
+ExecStart=/usr/bin/docker exec blog-api npm run automate:drafts
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full

@@ -17,7 +17,7 @@ The iOS admin app can review, edit, publish, or reject these drafts through the 
 ## Local Dry Run
 
 ```bash
-cd /srv/xminblog/blog-api
+cd blog-api
 DB_DRIVER=sqlite \
 SQLITE_PATH=./data/automation-smoke.sqlite \
 AUTOMATION_DRY_RUN=1 \
@@ -26,8 +26,16 @@ npm run automate:drafts -- --kind=all
 
 ## Production Run
 
+Docker home-server deployment:
+
 ```bash
-cd /srv/xminblog/blog-api
+docker exec blog-api npm run automate:drafts
+```
+
+Host Node deployment:
+
+```bash
+cd /home/sumin/xminblog/blog-api
 npm run automate:drafts
 ```
 
@@ -46,6 +54,8 @@ SECURITY_NEWS_FEEDS=https://www.cisa.gov/cybersecurity-advisories/all.xml,https:
 ```
 
 ## systemd Timer
+
+The included service targets the Docker deployment and runs the script inside the `blog-api` container.
 
 ```bash
 sudo cp systemd/xmin-blog-automation.service /etc/systemd/system/
