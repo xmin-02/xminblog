@@ -28,7 +28,7 @@ const dryRun = argSet.has('--dry-run') || process.env.AUTOMATION_DRY_RUN === '1'
 const kind = argValue('--kind', process.env.AUTOMATION_KIND || 'all');
 const cveLookbackDays = numberValue('CVE_LOOKBACK_DAYS', 3);
 const newsLookbackDays = numberValue('SECURITY_NEWS_LOOKBACK_DAYS', 1);
-const cveLimit = numberValue('CVE_DRAFT_LIMIT', numberValue('AUTOMATION_LIMIT', 5));
+const cveLimit = numberValue('CVE_DRAFT_LIMIT', numberValue('AUTOMATION_LIMIT', 10));
 const newsLimit = numberValue('SECURITY_NEWS_ITEM_LIMIT', 8);
 const minCvssScore = numberValue('CVE_MIN_CVSS_SCORE', 8.0);
 const nvdMaxPages = numberValue('NVD_MAX_PAGES', 3);
@@ -177,6 +177,7 @@ function aiInput(kind, source) {
         'Write a Korean daily security-news briefing draft.',
         'Required sections: 오늘의 핵심 동향, 우선 확인할 이슈, 패치/완화 메모, 메모, 원문 링크.',
         'Write publish-ready prose. Do not write internal review instructions or TODO checklists.',
+        'If the source items array is empty, clearly say that no major new security-news items were collected for the day and keep the draft short.',
         'In 원문 링크, render every URL as a clickable Markdown link like [source name](https://example.com).',
         'Group duplicate or related items when obvious from titles/summaries, but do not merge facts that are not supported by the source data.',
         'Do not include a top-level # heading because the blog renderer already shows the post title. Start section headings at ##.',
@@ -715,20 +716,19 @@ async function securityNewsPost(feedItems, kevItems) {
   const items = [...feedItems, ...kevItems]
     .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
     .slice(0, newsLimit);
-  if (!items.length) return null;
 
   const sourceId = `security-news:${today}`;
   const fallbackBody = `${aiDraftWarning}
 
 ## 오늘의 보안 동향
 
-${items.map((item, index) => `### ${index + 1}. ${item.title}
+${items.length ? items.map((item, index) => `### ${index + 1}. ${item.title}
 
 - 출처: ${item.source}
 - 공개일: ${isoDate(item.publishedAt)}
 - 링크: ${item.link}
 - 요약: ${item.summary || '본문 확인 후 요약을 보강하세요.'}
-`).join('\n')}
+`).join('\n') : '오늘 자동 수집된 주요 보안 뉴스 항목은 없습니다. 공개 피드와 CISA KEV 기준으로 신규 항목이 확인되지 않았습니다.'}
 
 ## 메모
 
@@ -749,7 +749,9 @@ ${items.map((item, index) => `### ${index + 1}. ${item.title}
   return {
     slug: `security-news-${today}`,
     title: `${today} 보안 동향 브리핑`,
-    description: `${aiDraft.ai_generated_content ? 'AI가 정리한' : '자동 수집된'} 보안 뉴스 ${items.length}건 검수 초안입니다.`,
+    description: items.length
+      ? `${aiDraft.ai_generated_content ? 'AI가 정리한' : '자동 수집된'} 보안 뉴스 ${items.length}건 브리핑입니다.`
+      : '오늘 자동 수집된 신규 보안 뉴스는 없습니다.',
     date: today,
     category: 'security-news',
     tags: aiDraft.ai_generated_content
@@ -759,7 +761,7 @@ ${items.map((item, index) => `### ${index + 1}. ${item.title}
     cover: '',
     is_private: false,
     source_type: 'security-news',
-    source_url: items[0].link,
+    source_url: items[0]?.link || 'https://www.cisa.gov/news-events/cybersecurity-advisories',
     source_id: sourceId,
     auto_generated: true,
     review_status: 'pending',

@@ -49,7 +49,7 @@ OPENAI_DRAFT_MODEL=gpt-5.4-mini
 OPENAI_DRAFT_MAX_OUTPUT_TOKENS=2600
 NVD_API_KEY=optional-nvd-api-key
 CVE_LOOKBACK_DAYS=3
-CVE_DRAFT_LIMIT=5
+CVE_DRAFT_LIMIT=10
 CVE_MIN_CVSS_SCORE=8
 NVD_MAX_PAGES=3
 NVD_RESULTS_PER_PAGE=200
@@ -60,9 +60,14 @@ SECURITY_NEWS_FEEDS=https://www.cisa.gov/cybersecurity-advisories/all.xml,https:
 
 If `OPENAI_API_KEY` is missing or `AI_DRAFTS=0`, the script writes the deterministic template-only draft. If the OpenAI call fails, the script falls back to that template unless `AI_DRAFT_REQUIRED=1` is set.
 
+Daily production automation runs both flows once:
+
+- CVE: creates up to 10 pending drafts per run.
+- Security news: creates one daily digest draft per date. `SECURITY_NEWS_ITEM_LIMIT` controls how many source items can be summarized inside that single digest.
+
 ## systemd Timer
 
-The included service targets the Docker deployment and runs the script inside the `blog-api` container.
+The included service targets the Docker deployment and runs the script inside the `blog-api` container once per day at 09:00 Asia/Seoul.
 
 ```bash
 sudo cp systemd/xmin-blog-automation.service /etc/systemd/system/

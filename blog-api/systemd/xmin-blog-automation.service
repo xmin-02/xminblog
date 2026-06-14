@@ -6,7 +6,7 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/docker exec blog-api npm run automate:drafts
+ExecStart=/usr/bin/docker exec -e AUTOMATION_KIND=all -e CVE_DRAFT_LIMIT=10 -e SECURITY_NEWS_LOOKBACK_DAYS=1 blog-api npm run automate:drafts
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
