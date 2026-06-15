@@ -563,6 +563,55 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return `<div class="post-cover"><img src="${esc(post.cover)}" alt="${esc(post.title)}" loading="eager" style="${coverCropStyle(post.cover_crop)}" /></div>`;
   }
 
+  function postNavTime(post) {
+    const dateTime = post?.date ? new Date(post.date).getTime() : NaN;
+    if (Number.isFinite(dateTime)) return dateTime;
+    const updatedTime = post?.updated_at ? Number(post.updated_at) * 1000 : NaN;
+    if (Number.isFinite(updatedTime)) return updatedTime;
+    const createdTime = post?.created_at ? Number(post.created_at) * 1000 : NaN;
+    return Number.isFinite(createdTime) ? createdTime : 0;
+  }
+
+  function comparePostsNewestFirst(a, b) {
+    const dateDiff = postNavTime(b) - postNavTime(a);
+    if (dateDiff !== 0) return dateDiff;
+    const updatedDiff = (Number(b?.updated_at) || 0) - (Number(a?.updated_at) || 0);
+    if (updatedDiff !== 0) return updatedDiff;
+    return String(b?.slug || '').localeCompare(String(a?.slug || ''), 'ko');
+  }
+
+  function lowerText(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function isCveResearchPost(post) {
+    const category = lowerText(post?.category);
+    const source = lowerText(post?.source_type);
+    const title = lowerText(post?.title);
+    const tags = (post?.tags || []).map(lowerText);
+    return ['cve', 'cve research'].includes(category)
+      || source === 'cve'
+      || tags.includes('cve')
+      || tags.includes('cves')
+      || title.startsWith('[cve research]');
+  }
+
+  function isSecurityNewsPost(post) {
+    const category = lowerText(post?.category);
+    const source = lowerText(post?.source_type);
+    const tags = (post?.tags || []).map(lowerText);
+    return ['security-news', 'security news'].includes(category)
+      || source === 'security-news'
+      || tags.includes('security-news')
+      || tags.includes('security news');
+  }
+
+  function postNavScope(post) {
+    if (isCveResearchPost(post)) return 'cve-research';
+    if (isSecurityNewsPost(post)) return 'security-news';
+    return 'posts';
+  }
+
   let _categoryOptions = [];
 
   function normalizeCategoryValue(raw) {
@@ -1324,7 +1373,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       if (!postRes.ok) throw new Error('Post not found');
       const post = await postRes.json();
       _currentPost = post;
-      const allPosts = allRes.ok ? (await allRes.json()).filter(p => !p.draft && !p.is_private) : [];
+      const allPosts = allRes.ok
+        ? (await allRes.json()).filter(p => !p.draft && !p.is_private).sort(comparePostsNewestFirst)
+        : [];
 
       // Private post: try cached password first
       if (post.is_private && post.content == null) {
@@ -1351,9 +1402,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         `<span class="px-2.5 py-1 rounded-full text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">${esc(t)}</span>`
       ).join('');
 
-      const idx = allPosts.findIndex(p => p.slug === slug);
-      const prev = idx > 0 ? allPosts[idx - 1] : null;
-      const next = idx < allPosts.length - 1 ? allPosts[idx + 1] : null;
+      const navScope = postNavScope(post);
+      const navPosts = allPosts.filter(p => postNavScope(p) === navScope);
+      const idx = navPosts.findIndex(p => p.slug === slug);
+      const prev = idx >= 0 && idx < navPosts.length - 1 ? navPosts[idx + 1] : null;
+      const next = idx > 0 ? navPosts[idx - 1] : null;
 
       const navHtml = (prev || next) ? `
         <div class="flex gap-3 mt-12">
