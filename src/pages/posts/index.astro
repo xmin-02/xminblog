@@ -12,6 +12,7 @@ import Layout from '../../layouts/Layout.astro';
       <div id="posts-list">
         <div class="v11-dim" style="font-size:12.5px;padding:14px 8px;">posts 불러오는 중…<span class="v11-cursor"></span></div>
       </div>
+      <div id="posts-pagination"></div>
     </main>
 
     <aside class="posts-side" aria-label="posts navigation">
@@ -152,10 +153,13 @@ import Layout from '../../layouts/Layout.astro';
 
 <script>
   import { areaForPost as areaFor } from '../../lib/area';
+  import { bindPagination, paginate, paginationHtml } from '../../lib/pagination';
 
   const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+  const PAGE_SIZE = 10;
   const params = new URLSearchParams(window.location.search);
   let activeCategory = params.get('category') || '';
+  let activePage = Number.parseInt(params.get('page') || '1', 10) || 1;
   let allPosts = [];
 
   function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -194,24 +198,32 @@ import Layout from '../../layouts/Layout.astro';
     return allPosts.filter(p => String(p.category || '') === activeCategory);
   }
 
-  function renderCount(posts){
+  function syncPageUrl(page){
+    const next = new URLSearchParams(window.location.search);
+    if(activeCategory) next.set('category', activeCategory); else next.delete('category');
+    if(page > 1) next.set('page', String(page)); else next.delete('page');
+    const qs = next.toString();
+    history.replaceState(null, '', `${location.pathname}${qs ? `?${qs}` : ''}`);
+  }
+
+  function renderCount(total, pageState){
     const el=document.getElementById('posts-count');
     if(!el) return;
     if(activeCategory){
-      el.innerHTML=`${posts.length} / ${allPosts.length} · <span class="v11-gr">${esc(activeCategory)}</span> · <a href="/posts">clear</a>`;
+      el.innerHTML=`${total} / ${allPosts.length} · page ${pageState.page}/${pageState.pageCount} · <span class="v11-gr">${esc(activeCategory)}</span> · <a href="/posts">clear</a>`;
       return;
     }
-    el.innerHTML=`${allPosts.length} entries · view: <span class="v11-gr">[list]</span> · <a href="/tags">tags</a>`;
+    el.innerHTML=`${allPosts.length} entries · page ${pageState.page}/${pageState.pageCount} · view: <span class="v11-gr">[list]</span> · <a href="/tags">tags</a>`;
   }
 
-  function render(posts){
+  function render(filteredPosts, pageState){
     const list=document.getElementById('posts-list');
-    renderCount(posts);
-    if(!posts.length){
+    renderCount(filteredPosts.length, pageState);
+    if(!filteredPosts.length){
       list.innerHTML='<div class="v11-dim" style="font-size:12.5px;padding:14px 8px;">조건에 맞는 글이 없습니다.</div>';
       return;
     }
-    list.innerHTML=posts.map(p=>{
+    list.innerHTML=pageState.items.map(p=>{
       const a=areaFor(p);
       const cover=thumbOf(p);
       const tags=(p.tags||[]).slice(0,3).map(t=>`<span class="v11-tag ${a}">#${esc(t)}</span>`).join('');
@@ -274,9 +286,22 @@ import Layout from '../../layouts/Layout.astro';
 
   function renderPage(){
     const posts=visiblePosts();
-    render(posts);
+    const pageState=paginate(posts, activePage, PAGE_SIZE);
+    activePage=pageState.page;
+    render(posts, pageState);
     renderCategories();
     renderRecent();
+    const pager=document.getElementById('posts-pagination');
+    if(pager){
+      pager.innerHTML=paginationHtml(pageState);
+      bindPagination(pager, (page)=>{
+        activePage=page;
+        syncPageUrl(activePage);
+        renderPage();
+        document.querySelector('.posts-main')?.scrollIntoView({block:'start'});
+      });
+    }
+    return pageState;
   }
 
   const IMG_RE=/!\[[^\]]*\]\((https?:\/\/[^)\s"']+)/;
@@ -305,8 +330,8 @@ import Layout from '../../layouts/Layout.astro';
       if(!res.ok) throw new Error('api');
       const data=await res.json();
       allPosts=data.filter(p=>!p.draft&&!p.is_private&&!isChannelPost(p)).sort((a,b)=>new Date(b.date)-new Date(a.date));
-      renderPage();
-      if(await deriveThumbs(visiblePosts())) renderPage(); // re-render once derived thumbnails are known
+      const pageState=renderPage();
+      if(await deriveThumbs(pageState.items)) renderPage(); // re-render once derived thumbnails are known
     }catch(e){
       document.getElementById('posts-list').innerHTML='<div class="v11-rd" style="font-size:12.5px;padding:14px 8px;">posts를 불러오지 못했습니다.</div>';
       document.getElementById('posts-categories').innerHTML='<span class="v11-rd">불러오기 실패</span>';

@@ -127,6 +127,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div id="mp-likes-list" class="space-y-2">
           <p class="text-xs text-[var(--color-text-secondary)]">불러오는 중...</p>
         </div>
+        <div id="mp-likes-pagination"></div>
       </section>
 
       <!-- My Posts (admin only) -->
@@ -148,6 +149,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div id="mp-posts-list" class="space-y-2">
           <p class="text-xs text-[var(--color-text-secondary)]">불러오는 중...</p>
         </div>
+        <div id="mp-posts-pagination"></div>
       </section>
 
       <!-- My Comments -->
@@ -156,6 +158,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div id="mp-comments-list" class="space-y-3">
           <p class="text-xs text-[var(--color-text-secondary)]">불러오는 중...</p>
         </div>
+        <div id="mp-comments-pagination"></div>
       </section>
     </div>
   </div>
@@ -254,6 +257,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   let _mpPublicPosts = [];
   let _mpLikes = [];
   let _mpComments = [];
+  let _mpPostPage = 1;
+  let _mpLikePage = 1;
+  let _mpCommentPage = 1;
+  const MP_PAGE_SIZE = 6;
 
   function isUploadedAvatarUrl(value) {
     const raw = String(value || '').trim();
@@ -341,6 +348,41 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   function setMpStat(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = String(value);
+  }
+
+  function mpPaginate(items, page, pageSize = MP_PAGE_SIZE) {
+    const total = items.length;
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const current = Math.min(pageCount, Math.max(1, Number.parseInt(String(page || 1), 10) || 1));
+    const startIndex = (current - 1) * pageSize;
+    return {
+      items: items.slice(startIndex, startIndex + pageSize),
+      page: current,
+      pageCount,
+      total,
+      start: total ? startIndex + 1 : 0,
+      end: Math.min(total, startIndex + pageSize),
+    };
+  }
+
+  function mpRenderPager(id, state, onPage) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (state.pageCount <= 1) {
+      el.innerHTML = '';
+      return;
+    }
+    el.innerHTML = `<nav class="v11-pagination" aria-label="pagination">
+      <button type="button" class="v11-pagination-btn" data-mp-page="${state.page - 1}" ${state.page <= 1 ? 'disabled' : ''}>prev</button>
+      <span class="v11-pagination-range">${state.start}-${state.end} / ${state.total}</span>
+      <button type="button" class="v11-pagination-btn" data-mp-page="${state.page + 1}" ${state.page >= state.pageCount ? 'disabled' : ''}>next</button>
+    </nav>`;
+    el.querySelectorAll('[data-mp-page]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (button.disabled) return;
+        onPage(Number.parseInt(button.dataset.mpPage || '1', 10) || 1);
+      });
+    });
   }
 
   document.getElementById('mp-profile-form').addEventListener('submit', async (e) => {
@@ -499,9 +541,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         return query.every(term => haystack.includes(term));
       });
     }
-    count.textContent = `${posts.length.toLocaleString('ko-KR')}개 표시 / 전체 ${_mpPosts.length.toLocaleString('ko-KR')}개`;
-    if (!posts.length) { list.innerHTML = '<p class="text-xs text-[var(--color-text-secondary)]">조건에 맞는 글이 없습니다.</p>'; return; }
-    list.innerHTML = posts.map(p => {
+    const pageState = mpPaginate(posts, _mpPostPage);
+    _mpPostPage = pageState.page;
+    count.textContent = `${posts.length.toLocaleString('ko-KR')}개 표시 / 전체 ${_mpPosts.length.toLocaleString('ko-KR')}개 · page ${pageState.page}/${pageState.pageCount}`;
+    if (!posts.length) {
+      list.innerHTML = '<p class="text-xs text-[var(--color-text-secondary)]">조건에 맞는 글이 없습니다.</p>';
+      mpRenderPager('mp-posts-pagination', pageState, () => {});
+      return;
+    }
+    list.innerHTML = pageState.items.map(p => {
       const date = p.date ? new Date(p.date).toLocaleDateString('ko-KR') : '';
       const draft = p.draft ? '<span class="mp-priv">[draft]</span>' : '';
       const priv = p.is_private ? '<span class="mp-priv">[private]</span>' : '';
@@ -517,6 +565,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         </div>
       </div>`;
     }).join('');
+    mpRenderPager('mp-posts-pagination', pageState, (page) => {
+      _mpPostPage = page;
+      renderMyPosts();
+    });
   }
 
   async function loadMyPosts() {
@@ -553,13 +605,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const status = document.getElementById('mp-likes-status');
     _mpLikes = rows || [];
     setMpStat('mp-stat-likes', _mpLikes.length.toLocaleString('ko-KR'));
-    if (status) status.textContent = `${_mpLikes.length.toLocaleString('ko-KR')}개`;
+    const pageState = mpPaginate(_mpLikes, _mpLikePage);
+    _mpLikePage = pageState.page;
+    if (status) status.textContent = `${_mpLikes.length.toLocaleString('ko-KR')}개${_mpLikes.length ? ` · page ${pageState.page}/${pageState.pageCount}` : ''}`;
     if (!_mpLikes.length) {
       list.innerHTML = '<p class="text-xs text-[var(--color-text-secondary)]">아직 좋아요한 글이 없습니다.</p>';
+      mpRenderPager('mp-likes-pagination', pageState, () => {});
       return;
     }
     const bySlug = new Map(_mpPublicPosts.map(p => [p.slug, p]));
-    list.innerHTML = _mpLikes.map(item => {
+    list.innerHTML = pageState.items.map(item => {
       const slug = item.post_slug || item.slug;
       const post = bySlug.get(slug);
       const title = item.post_title || post?.title || slug;
@@ -578,6 +633,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         </div>
       </a>`;
     }).join('');
+    mpRenderPager('mp-likes-pagination', pageState, (page) => {
+      _mpLikePage = page;
+      renderMyLikes(_mpLikes);
+    });
   }
 
   async function loadMyLikes() {
@@ -631,8 +690,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     renderMyLikes(liked);
   }
 
-  document.getElementById('mp-post-search')?.addEventListener('input', renderMyPosts);
-  document.getElementById('mp-post-filter')?.addEventListener('change', renderMyPosts);
+  document.getElementById('mp-post-search')?.addEventListener('input', () => { _mpPostPage = 1; renderMyPosts(); });
+  document.getElementById('mp-post-filter')?.addEventListener('change', () => { _mpPostPage = 1; renderMyPosts(); });
 
   async function mpDeletePost(slug) {
     if (!confirm(`"${slug}" 글을 삭제할까요?`)) return;
@@ -657,11 +716,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const list = document.getElementById('mp-comments-list');
     _mpComments = comments || [];
     setMpStat('mp-stat-comments', _mpComments.length.toLocaleString('ko-KR'));
+    const pageState = mpPaginate(_mpComments, _mpCommentPage);
+    _mpCommentPage = pageState.page;
     if (!_mpComments.length) {
       list.innerHTML = '<p class="text-xs text-[var(--color-text-secondary)]">댓글이 없습니다.</p>';
+      mpRenderPager('mp-comments-pagination', pageState, () => {});
       return;
     }
-    list.innerHTML = _mpComments.map(c => {
+    list.innerHTML = pageState.items.map(c => {
       const date = new Date(Number(c.created_at) * 1000).toLocaleString('ko-KR');
       const title = c.post_title || c.post_slug;
       return `<div class="mp-row" id="mp-c-${c.id}">
@@ -673,6 +735,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <p class="mp-meta mt-1.5">${esc(date)}</p>
       </div>`;
     }).join('');
+    mpRenderPager('mp-comments-pagination', pageState, (page) => {
+      _mpCommentPage = page;
+      renderMyComments(_mpComments);
+    });
   }
 
   async function loadMyComments() {

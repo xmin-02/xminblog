@@ -11,9 +11,11 @@ import Layout from '../../layouts/Layout.astro';
     <div style="border:1px solid var(--color-border);padding:12px 16px;font-size:12px;line-height:2;">
       <div class="v11-dim" style="margin-bottom:6px;"><span class="v11-gr">$</span> ls -la tags/ <span class="v11-dim">// size = posts · color = 영역</span></div>
       <div id="tags-ls"><span class="v11-dim">…</span></div>
+      <div id="tags-more"></div>
     </div>
 
     <div id="year-groups" style="margin-top:24px;"></div>
+    <div id="tags-pagination"></div>
 
     <div class="v11-dim" style="font-size:12px;margin-top:24px;padding-top:14px;border-top:1px solid var(--color-border);display:flex;justify-content:space-between;">
       <span><span class="v11-gr">$</span> echo "EOF"<span class="v11-cursor"></span></span>
@@ -56,8 +58,11 @@ import Layout from '../../layouts/Layout.astro';
 
 <script>
   import { areaForText as areaOf, areaForPost as areaFor, areaLabel } from '../../lib/area';
+  import { bindPagination, paginate, paginationHtml } from '../../lib/pagination';
 
   const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+  const TAG_LIMIT = 24;
+  const PAGE_SIZE = 12;
   function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function postUrl(slug){return `/post/?slug=${encodeURIComponent(slug)}`;}
   function fmtMD(d){try{return new Date(d).toISOString().slice(5,10);}catch{return'';}}
@@ -76,13 +81,38 @@ import Layout from '../../layouts/Layout.astro';
 
   let allPosts=[];
   let activeTag=new URLSearchParams(location.search).get('tag')||null;
+  let activePage=Number.parseInt(new URLSearchParams(location.search).get('page')||'1',10)||1;
+  let tagsExpanded=false;
+  let tagTotal=0;
+  let lastPageState=null;
+
+  function updateTagSummary(pageState=lastPageState){
+    const pageText=pageState ? ` · page ${pageState.page}/${pageState.pageCount}` : '';
+    document.getElementById('tags-summary').innerHTML =
+      `${allPosts.length} entries · ${tagTotal} tags${activeTag?` · 필터 <span class="v11-gr">#${esc(activeTag)}</span> <a href="/tags">[clear]</a>`:''}${pageText}`;
+  }
+
+  function syncPageUrl(page){
+    const next=new URLSearchParams();
+    if(activeTag) next.set('tag', activeTag);
+    if(page>1) next.set('page', String(page));
+    const qs=next.toString();
+    history.replaceState(null, '', `${location.pathname}${qs?`?${qs}`:''}`);
+  }
 
   function buildTagList(){
     const counts={};
     for(const p of allPosts) for(const t of (p.tags||[])) counts[t]=(counts[t]||0)+1;
     const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+    tagTotal=entries.length;
     const ls=document.getElementById('tags-ls');
-    ls.innerHTML=entries.map(([t,n])=>{
+    const limit=tagsExpanded ? entries.length : TAG_LIMIT;
+    const visible=entries.slice(0, limit);
+    if(activeTag && !visible.some(([tag])=>tag===activeTag)){
+      const activeEntry=entries.find(([tag])=>tag===activeTag);
+      if(activeEntry) visible.push(activeEntry);
+    }
+    ls.innerHTML=visible.map(([t,n])=>{
       const a=areaOf(t)|| (allPosts.find(p=>(p.tags||[]).includes(t))? areaFor(allPosts.find(p=>(p.tags||[]).includes(t))):'');
       const on=activeTag===t;
       return `<a href="?tag=${encodeURIComponent(t)}" class="v11-tag-row${on?' is-active':''}" style="text-decoration:none;">
@@ -92,17 +122,32 @@ import Layout from '../../layouts/Layout.astro';
         <span class="v11-areacol v11-dim" style="text-align:right;font-size:10.5px;">${areaLabel(a)}</span>
       </a>`;
     }).join('');
-    document.getElementById('tags-summary').innerHTML =
-      `${allPosts.length} entries · ${entries.length} tags${activeTag?` · 필터 <span class="v11-gr">#${esc(activeTag)}</span> <a href="/tags">[clear]</a>`:''}`;
+    const more=document.getElementById('tags-more');
+    if(more){
+      if(entries.length > TAG_LIMIT){
+        const hidden=Math.max(0, entries.length - TAG_LIMIT);
+        more.innerHTML=`<button type="button" id="tags-more-button" class="v11-more-button">${tagsExpanded?'less':`more +${hidden}`}</button>`;
+        document.getElementById('tags-more-button')?.addEventListener('click',()=>{
+          tagsExpanded=!tagsExpanded;
+          buildTagList();
+        });
+      } else {
+        more.innerHTML='';
+      }
+    }
+    updateTagSummary();
   }
 
   function buildYears(){
     const posts=activeTag?allPosts.filter(p=>(p.tags||[]).includes(activeTag)):allPosts;
+    const pageState=paginate(posts, activePage, PAGE_SIZE);
+    lastPageState=pageState;
+    activePage=pageState.page;
     const byYear={};
-    for(const p of posts){const y=(p.date?new Date(p.date).getFullYear():'—');(byYear[y]=byYear[y]||[]).push(p);}
+    for(const p of pageState.items){const y=(p.date?new Date(p.date).getFullYear():'—');(byYear[y]=byYear[y]||[]).push(p);}
     const years=Object.keys(byYear).sort((a,b)=>b-a);
     const root=document.getElementById('year-groups');
-    if(!posts.length){root.innerHTML='<div class="v11-dim" style="font-size:12.5px;padding:16px 0;">해당하는 글이 없습니다.</div>';return;}
+    if(!posts.length){root.innerHTML='<div class="v11-dim" style="font-size:12.5px;padding:16px 0;">해당하는 글이 없습니다.</div>';document.getElementById('tags-pagination').innerHTML='';updateTagSummary(pageState);return;}
     root.innerHTML=years.map(yr=>{
       const items=byYear[yr].sort((a,b)=>new Date(b.date)-new Date(a.date));
       const rows=items.map(p=>{
@@ -120,6 +165,17 @@ import Layout from '../../layouts/Layout.astro';
         ${rows}
       </div>`;
     }).join('');
+    updateTagSummary(pageState);
+    const pager=document.getElementById('tags-pagination');
+    if(pager){
+      pager.innerHTML=paginationHtml(pageState);
+      bindPagination(pager, (page)=>{
+        activePage=page;
+        syncPageUrl(activePage);
+        buildYears();
+        document.getElementById('year-groups')?.scrollIntoView({block:'start'});
+      });
+    }
   }
 
   async function load(){

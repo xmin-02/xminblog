@@ -25,6 +25,7 @@ import Layout from '../../layouts/Layout.astro';
       <div id="security-news-posts">
         <div class="v11-dim v11-channel-empty">보안 뉴스 글을 불러오는 중…<span class="v11-cursor"></span></div>
       </div>
+      <div id="security-news-pagination"></div>
     </div>
 
     <div class="v11-channel-notes">
@@ -35,12 +36,23 @@ import Layout from '../../layouts/Layout.astro';
 </Layout>
 
 <script>
+  import { bindPagination, paginate, paginationHtml } from '../../lib/pagination';
+
   const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+  const PAGE_SIZE = 10;
   const wantedTags = ['security-news', 'security news', 'news', '동향', '보안뉴스'];
+  let activePage = Number.parseInt(new URLSearchParams(location.search).get('page') || '1', 10) || 1;
+  let channelPosts = [];
 
   function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function postUrl(slug){return `/post/?slug=${encodeURIComponent(slug)}`;}
   function fmtDate(d){try{return new Date(d).toISOString().slice(0,10);}catch{return'';}}
+  function syncPageUrl(page){
+    const next = new URLSearchParams();
+    if(page > 1) next.set('page', String(page));
+    const qs = next.toString();
+    history.replaceState(null, '', `${location.pathname}${qs ? `?${qs}` : ''}`);
+  }
   function isSecurityNewsPost(post){
     const category = String(post.category || '').toLowerCase();
     const source = String(post.source_type || '').toLowerCase();
@@ -50,15 +62,18 @@ import Layout from '../../layouts/Layout.astro';
       || source === 'security-news'
       || wantedTags.some((tag) => tags.includes(tag));
   }
-  function render(posts){
+  function render(){
     const list = document.getElementById('security-news-posts');
     const count = document.getElementById('security-news-count');
-    count.textContent = `${posts.length} entries`;
-    if (!posts.length) {
+    const pageState = paginate(channelPosts, activePage, PAGE_SIZE);
+    activePage = pageState.page;
+    count.textContent = `${pageState.total} entries · page ${pageState.page}/${pageState.pageCount}`;
+    if (!channelPosts.length) {
       list.innerHTML = '<div class="v11-dim v11-channel-empty">아직 Security News 채널 글이 없습니다. 데일리 브리핑 자동화가 붙으면 여기에 모입니다.</div>';
+      document.getElementById('security-news-pagination').innerHTML = '';
       return;
     }
-    list.innerHTML = posts.map((post) => `<a class="v11-channel-row" href="${postUrl(post.slug)}">
+    list.innerHTML = pageState.items.map((post) => `<a class="v11-channel-row" href="${postUrl(post.slug)}">
       <span class="v11-dim">${esc(fmtDate(post.date))}</span>
       <span>
         <span class="v11-channel-row-title">${esc(post.title)}</span>
@@ -66,16 +81,28 @@ import Layout from '../../layouts/Layout.astro';
       </span>
       <span class="v11-dim">${(post.tags || []).slice(0, 2).map((tag) => `#${esc(tag)}`).join(' ')}</span>
     </a>`).join('');
+    const pager=document.getElementById('security-news-pagination');
+    if(pager){
+      pager.innerHTML=paginationHtml(pageState);
+      bindPagination(pager, (page)=>{
+        activePage=page;
+        syncPageUrl(activePage);
+        render();
+        document.querySelector('.v11-channel-panel')?.scrollIntoView({block:'start'});
+      });
+    }
   }
   async function load(){
     try {
       const response = await fetch(`${API_BASE}/api/posts`);
       if (!response.ok) throw new Error('load failed');
       const posts = await response.json();
-      render(posts.filter(isSecurityNewsPost));
+      channelPosts = posts.filter(isSecurityNewsPost).sort((a,b)=>new Date(b.date)-new Date(a.date));
+      render();
     } catch {
       document.getElementById('security-news-count').textContent = 'offline';
       document.getElementById('security-news-posts').innerHTML = '<div class="v11-dim v11-channel-empty">포스트 API를 불러오지 못했습니다.</div>';
+      document.getElementById('security-news-pagination').innerHTML = '';
     }
   }
   load();
