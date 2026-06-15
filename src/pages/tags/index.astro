@@ -30,6 +30,12 @@ import Layout from '../../layouts/Layout.astro';
     grid-template-columns: 120px 26px 1fr 70px;
     gap: 8px;
     color: var(--color-text);
+    align-items: baseline;
+  }
+  .v11-tag-row > span { min-width: 0; }
+  .v11-tag-row .v11-tag {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .v11-tag-row.is-active { color: var(--color-fg); background: var(--color-panel); padding: 0 6px; margin-left: -6px; }
   .v11-year-head {
@@ -49,7 +55,10 @@ import Layout from '../../layouts/Layout.astro';
   .v11-cat-row:hover .v11-cat-title { color: var(--color-green-br); }
   .v11-cat-title { color: var(--color-fg); font-family: var(--font-sans); font-size: 14px; }
   @media (max-width: 720px) {
-    .v11-tag-row { grid-template-columns: 1fr 60px; }
+    .v11-tag-row {
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 10px;
+    }
     .v11-tag-row .v11-perm, .v11-tag-row .v11-areacol { display: none; }
     .v11-cat-row { grid-template-columns: 56px 1fr 54px; }
     .v11-cat-row .v11-cat-area, .v11-cat-row .v11-cat-like { display: none; }
