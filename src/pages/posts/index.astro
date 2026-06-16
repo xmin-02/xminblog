@@ -163,7 +163,7 @@ import Layout from '../../layouts/Layout.astro';
   let allPosts = [];
 
   function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-  function postUrl(slug){return `/post/?slug=${encodeURIComponent(slug)}`;}
+  function postUrl(slug){return `/post/${encodeURIComponent(slug)}/`;}
   function categoryUrl(category){return category ? `/posts?category=${encodeURIComponent(category)}` : '/posts';}
   function fmtDate(d){try{return new Date(d).toISOString().slice(0,10);}catch{return'';}}
   function shortDate(d){try{return new Date(d).toLocaleDateString('ko-KR',{month:'short',day:'numeric'});}catch{return'';}}

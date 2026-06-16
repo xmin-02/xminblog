@@ -18,7 +18,7 @@ async function fallbackRss() {
 
   const items = posts.map((post) => {
     const slug = post.id.replace(/\.mdx?$/, '');
-    const url = `${SITE}/post/?slug=${encodeURIComponent(slug)}`;
+    const url = `${SITE}/post/${encodeURIComponent(slug)}/`;
     return `    <item>\n      <title>${escapeXml(post.data.title)}</title>\n      <link>${escapeXml(url)}</link>\n      <guid isPermaLink="true">${escapeXml(url)}</guid>\n      <description>${escapeXml(post.data.description)}</description>\n      <pubDate>${post.data.date.toUTCString()}</pubDate>\n    </item>`;
   }).join('\n');
 

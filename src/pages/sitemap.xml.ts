@@ -21,7 +21,7 @@ async function fallbackSitemap() {
     { loc: `${SITE}/security-news/`, priority: '0.6' },
   ];
   const postUrls = posts.map((post) => ({
-    loc: `${SITE}/post/?slug=${encodeURIComponent(post.id.replace(/\.mdx?$/, ''))}`,
+    loc: `${SITE}/post/${encodeURIComponent(post.id.replace(/\.mdx?$/, ''))}/`,
     lastmod: post.data.date.toISOString(),
     priority: '0.8',
   }));

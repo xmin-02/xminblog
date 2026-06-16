@@ -106,7 +106,7 @@ import Heatmap from '../components/Heatmap.astro';
   function esc(s) {
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
-  function postUrl(slug) { return `/post/?slug=${encodeURIComponent(slug)}`; }
+  function postUrl(slug) { return `/post/${encodeURIComponent(slug)}/`; }
   function isChannelPost(post) {
     const category = String(post.category || '').trim().toLowerCase();
     const source = String(post.source_type || '').trim().toLowerCase();

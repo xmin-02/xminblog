@@ -556,11 +556,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const cover = p.cover ? '<span class="mp-priv" style="color:var(--color-accent);">[cover]</span>' : '';
       return `<div class="mp-row flex items-start justify-between gap-3">
         <div class="min-w-0 flex-1">
-          <a href="/post/?slug=${encodeURIComponent(p.slug)}" class="mp-link text-sm">${esc(p.title)}</a>${draft}${priv}${cover}
+          <a href="/post/${encodeURIComponent(p.slug)}/" class="mp-link text-sm">${esc(p.title)}</a>${draft}${priv}${cover}
           <p class="mp-meta mt-0.5">${esc(date)} · [${esc(p.category)}] · ${esc(p.slug)}</p>
         </div>
         <div class="flex gap-1 flex-shrink-0">
-          <a href="/post/?slug=${encodeURIComponent(p.slug)}" class="mp-del-btn" style="color:var(--color-accent);">편집</a>
+          <a href="/post/${encodeURIComponent(p.slug)}/" class="mp-del-btn" style="color:var(--color-accent);">편집</a>
           <button class="mp-del-btn" onclick="mpDeletePost('${esc(p.slug)}')">삭제</button>
         </div>
       </div>`;
@@ -622,7 +622,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const likedAt = fmtDateTime(item.created_at);
       const postDate = item.post_date || post?.date;
       const date = postDate ? new Date(postDate).toLocaleDateString('ko-KR') : '';
-      return `<a href="/post/?slug=${encodeURIComponent(slug)}" class="mp-row block">
+      return `<a href="/post/${encodeURIComponent(slug)}/" class="mp-row block">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="mp-link text-sm">${esc(title)}</p>
@@ -728,7 +728,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const title = c.post_title || c.post_slug;
       return `<div class="mp-row" id="mp-c-${c.id}">
         <div class="flex items-start justify-between gap-2 mb-1">
-          <a href="/post/?slug=${encodeURIComponent(c.post_slug)}" class="mp-link text-xs">${esc(title)}</a>
+          <a href="/post/${encodeURIComponent(c.post_slug)}/" class="mp-link text-xs">${esc(title)}</a>
           <button class="mp-del-btn" onclick="mpDeleteComment(${c.id})">삭제</button>
         </div>
         <p class="text-sm leading-relaxed" style="color:var(--color-text);">${esc(c.content)}</p>

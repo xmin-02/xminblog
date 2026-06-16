@@ -612,10 +612,108 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return 'posts';
   }
 
+  function titleTokens(value) {
+    return new Set(String(value || '').toLowerCase().split(/[^a-z0-9가-힣]+/).filter(token => token.length >= 3));
+  }
+
+  function relatedPostScore(current, candidate) {
+    if (!candidate || candidate.slug === current.slug || candidate.draft || candidate.is_private) return -1;
+    let score = 0;
+    if (lowerText(candidate.category) && lowerText(candidate.category) === lowerText(current.category)) score += 8;
+
+    const currentTags = new Set((current.tags || []).map(lowerText).filter(Boolean));
+    for (const tag of candidate.tags || []) {
+      if (currentTags.has(lowerText(tag))) score += 4;
+    }
+
+    const currentTokens = titleTokens(`${current.title || ''} ${current.description || ''}`);
+    for (const token of titleTokens(`${candidate.title || ''} ${candidate.description || ''}`)) {
+      if (currentTokens.has(token)) score += 1;
+    }
+
+    return score || (postNavTime(candidate) ? 0.1 : 0);
+  }
+
+  function relatedPosts(current, posts, limit = 4) {
+    return (Array.isArray(posts) ? posts : [])
+      .map(post => ({ post, score: relatedPostScore(current, post) }))
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score || postNavTime(b.post) - postNavTime(a.post))
+      .slice(0, limit)
+      .map(item => item.post);
+  }
+
+  function renderRelatedPosts(current, posts) {
+    const related = relatedPosts(current, posts);
+    if (!related.length) return '';
+    return `
+      <aside class="mt-10 pt-6 border-t border-[var(--color-border)]" aria-label="관련 글">
+        <p class="text-sm font-bold mb-4" style="font-family:var(--font-display);color:var(--color-text);">관련 글</p>
+        <div class="grid gap-3 sm:grid-cols-2">
+          ${related.map(post => `
+            <a href="${postUrl(post.slug)}" class="block rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4 transition-colors hover:border-[var(--color-accent)]">
+              <span class="text-[10px] font-semibold uppercase tracking-wide" style="color:var(--color-accent);font-family:var(--font-mono);">${esc(post.category || 'post')}</span>
+              <span class="block mt-1 text-sm font-semibold leading-snug text-[var(--color-text)]">${esc(post.title || post.slug)}</span>
+              ${post.description ? `<span class="block mt-1 text-xs leading-relaxed text-[var(--color-text-secondary)]">${esc(post.description)}</span>` : ''}
+            </a>`).join('')}
+        </div>
+      </aside>`;
+  }
+
   let _categoryOptions = [];
 
   function normalizeCategoryValue(raw) {
     return String(raw ?? '').replace(/\s+/g, ' ').trim();
+  }
+
+  const SEO_SLUG_TERMS = [
+    [/취약점/g, ' vulnerability '],
+    [/분석/g, ' analysis '],
+    [/파일/g, ' file '],
+    [/파싱/g, ' parsing '],
+    [/트랙/g, ' track '],
+    [/준비/g, ' prep '],
+    [/서류/g, ' documents '],
+    [/합격/g, ' accepted '],
+    [/보안/g, ' security '],
+    [/동향/g, ' news '],
+    [/브리핑/g, ' briefing '],
+    [/어셈블리/g, ' assembly '],
+    [/명령어/g, ' instructions '],
+    [/정리/g, ' notes '],
+    [/기본/g, ' basic '],
+    [/공부/g, ' study '],
+    [/시작/g, ' start '],
+    [/리눅스/g, ' linux '],
+    [/커널/g, ' kernel '],
+    [/퍼징/g, ' fuzzing '],
+    [/리버싱/g, ' reversing '],
+    [/빌드/g, ' build '],
+    [/실행/g, ' run '],
+    [/하네스/g, ' harness '],
+    [/논문/g, ' paper '],
+    [/프로젝트/g, ' project '],
+    [/보고서/g, ' report '],
+    [/윈도우/g, ' windows '],
+    [/알송/g, ' alsong '],
+  ];
+
+  function slugifyForUrl(value) {
+    let next = String(value ?? '');
+    for (const [pattern, replacement] of SEO_SLUG_TERMS) next = next.replace(pattern, replacement);
+    return next
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .replace(/\+/g, ' plus ')
+      .replace(/#/g, ' sharp ')
+      .replace(/[^a-z0-9\s-]/g, ' ')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80)
+      .replace(/-$/g, '');
   }
 
   function categoryValidationError(raw) {
@@ -1278,7 +1376,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   let _isNewPost = false;
 
   function postUrl(slug) {
-    return `/post/?slug=${encodeURIComponent(slug)}`;
+    return `/post/${encodeURIComponent(slug)}/`;
   }
 
   async function populateRecentSidebar(excludeSlug, options = {}) {
@@ -1321,6 +1419,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   function readRouteSlug() {
     const hashSlug = window.location.hash ? decodeURIComponent(window.location.hash.slice(1)) : '';
     if (hashSlug === 'new') return 'new';
+    const pathMatch = window.location.pathname.match(/^\/post\/([^/]+)\/?$/);
+    if (pathMatch) return decodeURIComponent(pathMatch[1]);
     const querySlug = new URLSearchParams(window.location.search).get('slug') || '';
     return querySlug || hashSlug;
   }
@@ -1464,6 +1564,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             </button>
             <span class="text-xs text-[var(--color-text-secondary)]">이 글이 도움이 됐나요?</span>
           </div>
+
+          ${renderRelatedPosts(post, allPosts)}
 
           ${navHtml}`}
 
@@ -1716,6 +1818,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           style="font-family:var(--font-display);color:var(--color-text);"
         >${esc(post.title || '')}</h1>
 
+        ${_isNewPost ? `
+          <label class="edit-field-label">URL slug <span style="opacity:0.7;">(선택, 영문 URL 권장)</span></label>
+          <input id="edit-slug" type="text" value="${esc(slugifyForUrl(post.title || ''))}" placeholder="예: bob-15-vulnerability-analysis-track-prep"
+            class="text-xs text-[var(--color-text-secondary)] bg-transparent outline-none px-2 py-1.5 rounded border border-dashed border-[var(--color-border)] transition-colors focus:border-[var(--color-accent)] w-full mb-5"
+            style="max-width:520px;font-family:var(--font-mono);" />
+        ` : ''}
+
         <!-- Description -->
         <label class="edit-field-label">설명 <span class="text-[var(--color-text-secondary)]" style="opacity:0.7;">(목록·OG 미리보기에 표시)</span></label>
         <p id="edit-desc" contenteditable="true" spellcheck="false"
@@ -1804,8 +1913,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     document.getElementById('edit-cover')?.addEventListener('input', event => {
       updateCoverPreview(event.target.value.trim(), { keepCrop: true });
     });
+    setupSlugInput();
     setupCategoryInput();
     setupCoverDropZone();
+  }
+
+  function setupSlugInput() {
+    const slugInput = document.getElementById('edit-slug');
+    const titleEl = document.getElementById('edit-title');
+    if (!slugInput || !titleEl) return;
+    let touched = !!slugInput.value;
+    slugInput.addEventListener('input', () => {
+      touched = true;
+      slugInput.value = slugifyForUrl(slugInput.value);
+    });
+    slugInput.addEventListener('blur', () => {
+      slugInput.value = slugifyForUrl(slugInput.value);
+    });
+    titleEl.addEventListener('input', () => {
+      if (touched) return;
+      slugInput.value = slugifyForUrl(titleEl.innerText || '');
+    });
   }
 
   function waitForEditor(maxWaitMs = 8000) {
@@ -2050,6 +2178,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const is_private = document.getElementById('edit-private')?.checked ?? false;
     const private_password = document.getElementById('edit-password')?.value || '';
     const content = (_editor ? _editor.getMarkdown() : '').trim();
+    const slug = document.getElementById('edit-slug')?.value?.trim() || '';
 
     const categoryError = categoryValidationError(rawCategory);
     if (categoryError) {
@@ -2075,6 +2204,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const token = localStorage.getItem('auth_token');
 
     const body = { title, description, date, category, tags, draft, cover, cover_crop, content, is_private };
+    if (_isNewPost && slug) body.slug = slug;
     if (private_password) body.private_password = private_password;
 
     try {

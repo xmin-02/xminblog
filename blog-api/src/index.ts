@@ -366,7 +366,7 @@ interface PostMeta {
   review_status?: ReviewStatus;
   reviewed_at?: number | null;
 }
-interface PostPayload extends PostMeta { content: string; password: string; private_password?: string; }
+interface PostPayload extends PostMeta { content: string; password: string; private_password?: string; slug?: string; }
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'published';
 const REVIEW_STATUSES = new Set<ReviewStatus>(['pending', 'approved', 'rejected', 'published']);
@@ -440,14 +440,68 @@ function parseFrontmatter(raw: string): { meta: Partial<PostMeta>; body: string 
   return { meta, body };
 }
 
-function slugify(title: string): string {
-  return title
+const SEO_TERM_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/취약점/g, ' vulnerability '],
+  [/분석/g, ' analysis '],
+  [/파일/g, ' file '],
+  [/파싱/g, ' parsing '],
+  [/트랙/g, ' track '],
+  [/준비/g, ' prep '],
+  [/서류/g, ' documents '],
+  [/합격/g, ' accepted '],
+  [/보안/g, ' security '],
+  [/동향/g, ' news '],
+  [/브리핑/g, ' briefing '],
+  [/어셈블리/g, ' assembly '],
+  [/명령어/g, ' instructions '],
+  [/정리/g, ' notes '],
+  [/기본/g, ' basic '],
+  [/공부/g, ' study '],
+  [/시작/g, ' start '],
+  [/리눅스/g, ' linux '],
+  [/커널/g, ' kernel '],
+  [/퍼징/g, ' fuzzing '],
+  [/리버싱/g, ' reversing '],
+  [/빌드/g, ' build '],
+  [/실행/g, ' run '],
+  [/하네스/g, ' harness '],
+  [/논문/g, ' paper '],
+  [/프로젝트/g, ' project '],
+  [/보고서/g, ' report '],
+  [/윈도우/g, ' windows '],
+  [/알송/g, ' alsong '],
+];
+
+function shortHash(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36).slice(0, 6);
+}
+
+function replaceSeoTerms(value: string): string {
+  return SEO_TERM_REPLACEMENTS.reduce((next, [pattern, replacement]) => next.replace(pattern, replacement), value);
+}
+
+function slugify(title: string, fallback = ''): string {
+  const source = replaceSeoTerms(String(title ?? ''))
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/&/g, ' and ')
+    .replace(/\+/g, ' plus ')
+    .replace(/#/g, ' sharp ')
+    .replace(/[^a-z0-9\s-]/g, ' ')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
-    .slice(0, 80);
+    .slice(0, 80)
+    .replace(/-$/g, '');
+  if (source) return source;
+  const seed = String(fallback || title || Date.now());
+  return `post-${shortHash(seed)}`;
 }
 
 function isSafeSlug(slug: string): boolean {
@@ -1621,7 +1675,7 @@ async function listPublicMetaPosts(env: Env, origin: string | null): Promise<Pub
 }
 
 function postCanonicalUrl(slug: string): string {
-  return `${SITE}/post/?slug=${encodeURIComponent(slug)}`;
+  return `${SITE}/post/${encodeURIComponent(slug)}/`;
 }
 
 function toRssDate(value: string | number | null | undefined): string {
@@ -1775,7 +1829,7 @@ async function createPost(payload: PostPayload, env: Env, origin: string | null,
   if (!category) return json({ error: 'category is required' }, 400, origin);
   payload.category = category;
 
-  const slug = slugify(payload.title);
+  const slug = slugify(payload.slug || payload.title, `${payload.title}-${payload.date}`);
   if (!slug) return json({ error: 'Could not derive slug from title' }, 400, origin);
   if (!isSafeSlug(slug)) return json({ error: 'Invalid slug' }, 400, origin);
 

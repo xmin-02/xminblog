@@ -73,7 +73,7 @@ import Layout from '../../layouts/Layout.astro';
   const TAG_LIMIT = 24;
   const PAGE_SIZE = 12;
   function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-  function postUrl(slug){return `/post/?slug=${encodeURIComponent(slug)}`;}
+  function postUrl(slug){return `/post/${encodeURIComponent(slug)}/`;}
   function fmtMD(d){try{return new Date(d).toISOString().slice(5,10);}catch{return'';}}
   function readTime(p){const n=((p.title||'').length+(p.description||'').length)*6+600;return Math.max(3,Math.round(n/350))+'m';}
   function likesOf(p){return p.likes ?? p.like_count ?? p.likes_count ?? 0;}
