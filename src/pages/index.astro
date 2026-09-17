@@ -101,7 +101,7 @@ import Heatmap from '../components/Heatmap.astro';
 <script>
   import { areaForPost as areaFor } from '../lib/area';
 
-  const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+  const API_BASE = window.__XMIN_API_BASE__ || 'https://blog-api.xmin.blog';
 
   function esc(s) {
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

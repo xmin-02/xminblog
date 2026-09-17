@@ -6,7 +6,7 @@
  *   CONTENT_ROOT=../src/content/blog \
  *   DATABASE_URL=postgresql://... \
  *   UPLOAD_DIR=/opt/xminblog/blog-api/data/uploads \
- *   PUBLIC_UPLOAD_BASE=https://api.xmin.cloud/uploads \
+ *   PUBLIC_UPLOAD_BASE=https://blog-api.xmin.blog/uploads \
  *   npm run import:markdown
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';

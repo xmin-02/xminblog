@@ -246,7 +246,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 </style>
 
 <script is:inline>
-  const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+  const API_BASE = window.__XMIN_API_BASE__ || 'https://blog-api.xmin.blog';
 
   function esc(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -462,7 +462,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 404 || data.error === 'Not found') {
-          throw new Error('프로필 업로드 API가 아직 배포되지 않았습니다. api.xmin.cloud 재배포가 필요합니다.');
+          throw new Error('프로필 업로드 API가 아직 배포되지 않았습니다. blog-api.xmin.blog 배포 상태를 확인하세요.');
         }
         if (res.status === 401) {
           throw new Error('로그인이 만료되었습니다. 다시 로그인해 주세요.');

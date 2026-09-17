@@ -7,7 +7,7 @@ This follows the home infrastructure map from `/Users/sumin/Desktop/home_server_
 | Role | Target |
 |---|---|
 | Frontend | Astro static site |
-| Public API domain | `https://api.xmin.cloud` recommended by the home-server domain policy, or keep `https://api.xmin.blog` by CNAME/router alias |
+| Public API domain | `https://blog-api.xmin.blog` recommended by the home-server domain policy, or keep `https://api.xmin.blog` by CNAME/router alias |
 | API runtime | Docker container on vm-public LXC 106 (`192.168.45.60`) |
 | DB | PostgreSQL 16 on vm-db LXC 107 (`192.168.45.70:5432`) |
 | Uploaded images | Persistent vm-public volume mounted at `/app/data/uploads`, served by the API under `/uploads/*` |
@@ -120,21 +120,21 @@ Host(`api.xmin.cloud`) -> http://192.168.45.60:3001
 External verification:
 
 ```bash
-curl -i https://api.xmin.cloud/health
-curl -i https://api.xmin.cloud/api/posts
+curl -i https://blog-api.xmin.blog/health
+curl -i https://blog-api.xmin.blog/api/posts
 ```
 
 If you want to keep `https://api.xmin.blog`, add a second Traefik Host rule/alias or point the old DNS name to the `.cloud` route and build the frontend with the matching API base.
 
 ## 5. Frontend API base
 
-Default is `https://api.xmin.cloud`. If needed, override the frontend API base at build time:
+Default is `https://blog-api.xmin.blog`. If needed, override the frontend API base at build time:
 
 ```bash
-PUBLIC_API_BASE=https://api.xmin.cloud npm run build
+PUBLIC_API_BASE=https://blog-api.xmin.blog npm run build
 ```
 
-The CSP header allows both `https://api.xmin.blog` and `https://api.xmin.cloud` in `connect-src`, so either API base works after redeploy.
+The CSP header allows both `https://api.xmin.blog` and `https://blog-api.xmin.blog` in `connect-src`, so either API base works after redeploy.
 
 ## 6. Existing interaction data migration
 
@@ -179,7 +179,7 @@ Before changing DNS or public routing:
 - [ ] D1 interaction data is imported or intentionally deferred.
 - [ ] `curl -fsS http://127.0.0.1:3001/health` succeeds on vm-public.
 - [ ] `curl -fsS http://192.168.45.60:3001/health` succeeds from vm-edge.
-- [ ] `curl -fsS https://api.xmin.cloud/health` succeeds through Traefik/cloudflared.
+- [ ] `curl -fsS https://blog-api.xmin.blog/health` succeeds through Traefik/cloudflared.
 - [ ] Admin login works and `/api/upload` stores a file under `data/uploads`.
 - [ ] Frontend is rebuilt with the chosen `PUBLIC_API_BASE` and deployed.
 - [ ] Backup job covers vm-db PostgreSQL and vm-public `blog-api/data/uploads`.

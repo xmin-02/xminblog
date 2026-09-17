@@ -140,7 +140,7 @@ const pathname = Astro.url.pathname;
     const raw = String(value || '').trim();
     if (!raw) return '';
     if (raw.startsWith('/uploads/')) {
-      const apiBase = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+      const apiBase = window.__XMIN_API_BASE__ || 'https://blog-api.xmin.blog';
       return `${apiBase}${raw}`;
     }
     return raw;

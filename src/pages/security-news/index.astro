@@ -38,7 +38,7 @@ import Layout from '../../layouts/Layout.astro';
 <script>
   import { bindPagination, paginate, paginationHtml } from '../../lib/pagination';
 
-  const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+  const API_BASE = window.__XMIN_API_BASE__ || 'https://blog-api.xmin.blog';
   const PAGE_SIZE = 10;
   const wantedTags = ['security-news', 'security news', 'news', '동향', '보안뉴스'];
   let activePage = Number.parseInt(new URLSearchParams(location.search).get('page') || '1', 10) || 1;

@@ -47,7 +47,7 @@ tar -C /home/sumin/xminblog/blog-api/data -xzf /path/to/uploads.tar.gz
 복원 후 검증:
 
 ```bash
-curl -fsS https://api.xmin.cloud/health
-curl -fsS https://api.xmin.cloud/api/posts | jq 'length'
-curl -I https://api.xmin.cloud/uploads/<known-image-file>
+curl -fsS https://blog-api.xmin.blog/health
+curl -fsS https://blog-api.xmin.blog/api/posts | jq 'length'
+curl -I https://blog-api.xmin.blog/uploads/<known-image-file>
 ```

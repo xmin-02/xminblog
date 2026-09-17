@@ -1,4 +1,4 @@
-const API_BASE = 'https://api.xmin.cloud';
+const API_BASE = 'https://blog-api.xmin.blog';
 const PROXY_PATHS = new Set(['/rss.xml', '/feed.xml', '/sitemap.xml']);
 
 function copyHeaders(headers) {

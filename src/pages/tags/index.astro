@@ -69,7 +69,7 @@ import Layout from '../../layouts/Layout.astro';
   import { areaForText as areaOf, areaForPost as areaFor, areaLabel } from '../../lib/area';
   import { bindPagination, paginate, paginationHtml } from '../../lib/pagination';
 
-  const API_BASE = window.__XMIN_API_BASE__ || 'https://api.xmin.cloud';
+  const API_BASE = window.__XMIN_API_BASE__ || 'https://blog-api.xmin.blog';
   const TAG_LIMIT = 24;
   const PAGE_SIZE = 12;
   function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}

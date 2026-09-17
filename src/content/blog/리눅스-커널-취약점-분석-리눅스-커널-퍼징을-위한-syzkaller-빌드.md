@@ -5,7 +5,7 @@ date: 2025-11-01T15:23:00+09:00
 category: "환경 구축"
 tags: ["fuzz", "kernel fuzzing", "Linux Kernel", "Syzkaller"]
 draft: false
-cover: "https://api.xmin.cloud/uploads/tistory-리눅스-커널-취약점-분석-리눅스-커널-퍼징을-위한-syzkaller-빌드-01-152f145c2cb4.png"
+cover: "https://blog-api.xmin.blog/uploads/tistory-리눅스-커널-취약점-분석-리눅스-커널-퍼징을-위한-syzkaller-빌드-01-152f145c2cb4.png"
 coverAlt: "QEMU에서 부팅된 커스텀 리눅스 커널 화면"
 ---
 
@@ -65,7 +65,7 @@ ssh -i /usr/src/kernel/image/bullseye.id_rsa -p 10021 -o "StrictHostKeyChecking 
 
 qemu가 정상 부팅 된다면 다음과 같을 것이다.
 
-![QEMU 부팅 모습](https://api.xmin.cloud/uploads/tistory-리눅스-커널-취약점-분석-리눅스-커널-퍼징을-위한-syzkaller-빌드-01-152f145c2cb4.png)
+![QEMU 부팅 모습](https://blog-api.xmin.blog/uploads/tistory-리눅스-커널-취약점-분석-리눅스-커널-퍼징을-위한-syzkaller-빌드-01-152f145c2cb4.png)
 
 ## Go 빌드
 
@@ -126,7 +126,7 @@ my.cfg 파일을 만든 뒤 실행 명령어는 다음과 같다.
 
 정상적으로 퍼징이 수행되면 다음과 같은 모습이다.
 
-![Syzkaller 퍼징 실행](https://api.xmin.cloud/uploads/tistory-리눅스-커널-취약점-분석-리눅스-커널-퍼징을-위한-syzkaller-빌드-02-70f5e1d22837.png)
+![Syzkaller 퍼징 실행](https://blog-api.xmin.blog/uploads/tistory-리눅스-커널-취약점-분석-리눅스-커널-퍼징을-위한-syzkaller-빌드-02-70f5e1d22837.png)
 
 이제 Syzkaller가 정상 작동 한다는 것을 알 수 있다. 잘 빌드가 된 것이다.
 

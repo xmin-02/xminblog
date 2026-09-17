@@ -1,7 +1,7 @@
 import { getCollection } from 'astro:content';
 
 const SITE = 'https://xmin.blog';
-const API_RSS = 'https://api.xmin.cloud/api/rss.xml';
+const API_RSS = 'https://blog-api.xmin.blog/api/rss.xml';
 
 function escapeXml(value: string) {
   return value

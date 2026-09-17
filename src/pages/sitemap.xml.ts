@@ -1,7 +1,7 @@
 import { getCollection } from 'astro:content';
 
 const SITE = 'https://xmin.blog';
-const API_SITEMAP = 'https://api.xmin.cloud/api/sitemap.xml';
+const API_SITEMAP = 'https://blog-api.xmin.blog/api/sitemap.xml';
 
 function escapeXml(value: string) {
   return value
