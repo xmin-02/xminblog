@@ -15,7 +15,12 @@ pnpm-debug.log*
 
 # environment variables
 .env
+.env.*
 .env.production
+.env.home
+# keep example/templated env files tracked
+!.env.example
+!.env.*.example
 
 # macOS-specific files
 .DS_Store
@@ -40,3 +45,8 @@ blog-api/data/
 
 # Local design reference bundle (not part of the site)
 design_handoff_xmin_blog_v11/
+
+# Local writing and analysis workspaces
+drafts/
+reports/
+transcripts/
