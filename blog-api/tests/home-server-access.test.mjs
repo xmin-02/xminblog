@@ -14,6 +14,7 @@ async function harness(t) {
   const errors = [];
   let handler;
   let failLogging = false;
+  let monotonicNs = 0n;
   const worker = { fetch: async () => new Response('ok') };
   const context = createContext({
     Buffer, URL, URLSearchParams, Headers, Request, Response, setTimeout, clearTimeout,
@@ -21,7 +22,7 @@ async function harness(t) {
       log(value) { if (failLogging) throw new Error('sink unavailable'); lines.push(value); },
       error(value) { if (failLogging) throw new Error('sink unavailable'); errors.push(value); },
     },
-    process: { cwd: () => directory, env: { DB_DRIVER: 'postgres', DATABASE_URL: 'test-only',
+    process: { hrtime: { bigint: () => monotonicNs }, cwd: () => directory, env: { DB_DRIVER: 'postgres', DATABASE_URL: 'test-only',
       ADMIN_PASSWORD: 'test-only', JWT_SECRET: 'test-only', UPLOAD_DIR: directory } },
   });
   const url = new URL('../home-server.mjs', import.meta.url);
@@ -59,6 +60,7 @@ async function harness(t) {
     return res.statusCode;
   }
   return { request, handle: (req, res) => handler(req, res), lines, errors, worker, directory,
+    advance(ms) { monotonicNs += BigInt(ms) * 1000000n; },
     breakLogger() { failLogging = true; } };
 }
 
@@ -102,11 +104,13 @@ test('finish logs once for uploads, 404s, and thrown errors without leaking the 
   const h = await harness(t);
   await writeFile(join(h.directory, 'fixture.png'), 'fixture');
   assert.equal(await h.request('/uploads/fixture.png'), 200);
-  h.worker.fetch = async () => new Response('missing', { status: 404 });
+  assert.equal(JSON.parse(h.lines[0]).duration_ms, 0);
+  h.worker.fetch = async () => { h.advance(17); return new Response('missing', { status: 404 }); };
   assert.equal(await h.request('/missing'), 404);
   h.worker.fetch = async () => { throw new Error('PRIVATE-error-with-credentials'); };
   assert.equal(await h.request('/broken'), 500);
   assert.deepEqual(h.lines.map(line => JSON.parse(line).status), [200, 404, 500]);
+  assert.deepEqual(h.lines.map(line => JSON.parse(line).duration_ms), [0, 17, 0]);
   assert.deepEqual(h.lines.map(line => JSON.parse(line).path), ['/uploads/fixture.png', '/missing', '/broken']);
   assert.deepEqual(h.lines.map(line => JSON.parse(line).response_completed), [true, true, true]);
   assert.deepEqual(h.errors.map(line => JSON.parse(line)), [
@@ -132,12 +136,14 @@ test('early response close records incomplete once without a synthetic 200', asy
   const handling = h.handle({ method: 'GET', url: '/aborted?token=PRIVATE&canary=keep',
     headers: { host: 'blog.test' }, socket: { remoteAddress: '172.18.0.5' } }, res);
   await waiting;
+  h.advance(23);
   const closed = once(res, 'close');
   res.destroy();
   await closed;
   assert.equal(h.lines.length, 1);
   const record = JSON.parse(h.lines[0]);
   assert.equal(record.response_completed, false);
+  assert.equal(record.duration_ms, 23);
   assert.equal(record.status, null);
   assert.equal(record.remote_addr, '172.18.0.5');
   assert.equal(record.path.includes('PRIVATE'), false);

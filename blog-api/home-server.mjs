@@ -347,7 +347,7 @@ function accessLogText(value, budget) {
   return result;
 }
 
-function logHttpAccess(req, res, completed) {
+function logHttpAccess(req, res, completed, startedAt) {
   try {
     const target = String(req.url || '/').split('#', 1)[0];
     const queryAt = target.indexOf('?');
@@ -364,6 +364,7 @@ function logHttpAccess(req, res, completed) {
       event: 'http_access', service: 'blog-api',
       method: accessLogText(req.method, 32), path: accessLogText(path, 4096),
       status: completed ? res.statusCode : null, response_completed: completed,
+      duration_ms: Number(process.hrtime.bigint() - startedAt) / 1e6,
       host: accessLogText(req.headers.host, 512),
       user_agent: accessLogText(req.headers['user-agent'], 1024),
       remote_addr: accessLogText(req.socket.remoteAddress, 128),
@@ -377,11 +378,12 @@ function logHttpAccess(req, res, completed) {
 }
 
 const server = createServer(async (req, res) => {
+  const startedAt = process.hrtime.bigint();
   let logged = false;
   const logOnce = completed => {
     if (logged) return;
     logged = true;
-    logHttpAccess(req, res, completed);
+    logHttpAccess(req, res, completed, startedAt);
   };
   res.once('finish', () => logOnce(true));
   res.once('close', () => logOnce(res.writableFinished === true));
