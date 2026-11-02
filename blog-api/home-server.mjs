@@ -336,14 +336,66 @@ const env = {
   DB,
 };
 
+function accessLogText(value, budget) {
+  let result = '';
+  for (const char of String(value ?? '').slice(0, budget)) {
+    const bytes = Buffer.byteLength(JSON.stringify(char)) - 2;
+    if (bytes > budget) break;
+    result += char;
+    budget -= bytes;
+  }
+  return result;
+}
+
+function logHttpAccess(req, res, completed) {
+  try {
+    const target = String(req.url || '/').split('#', 1)[0];
+    const queryAt = target.indexOf('?');
+    const pathname = queryAt < 0 ? target : target.slice(0, queryAt);
+    const query = new URLSearchParams();
+    if (queryAt >= 0) {
+      for (const [name, value] of new URLSearchParams(target.slice(queryAt + 1))) {
+        query.append(accessLogText(name, 128), /credential|cookie|password|passwd|token|secret|key|auth|session|signature|^sig$|^jwt$/i.test(name)
+          ? '[REDACTED]' : accessLogText(value, 512));
+      }
+    }
+    const path = (pathname.startsWith('/') ? pathname : '[invalid-target]') + (query.size ? `?${query}` : '');
+    console.log(JSON.stringify({
+      event: 'http_access', service: 'blog-api',
+      method: accessLogText(req.method, 32), path: accessLogText(path, 4096),
+      status: completed ? res.statusCode : null, response_completed: completed,
+      host: accessLogText(req.headers.host, 512),
+      user_agent: accessLogText(req.headers['user-agent'], 1024),
+      remote_addr: accessLogText(req.socket.remoteAddress, 128),
+      ray_id: accessLogText(req.headers['cf-ray'], 128),
+      // A recorded header claim, never a replacement for the socket peer.
+      'request_CF-Connecting-IP': accessLogText(req.headers['cf-connecting-ip'], 128),
+    }));
+  } catch {
+    // Logging must not interrupt a response or expose raw request/error data.
+  }
+}
+
 const server = createServer(async (req, res) => {
+  let logged = false;
+  const logOnce = completed => {
+    if (logged) return;
+    logged = true;
+    logHttpAccess(req, res, completed);
+  };
+  res.once('finish', () => logOnce(true));
+  res.once('close', () => logOnce(res.writableFinished === true));
   try {
     if (await serveUpload(req, res)) return;
     const request = toRequest(req);
     const response = await worker.fetch(request, env);
     await writeResponse(res, response);
-  } catch (error) {
-    console.error(error);
+  } catch {
+    try {
+      console.error(JSON.stringify({ event: 'http_error', service: 'blog-api', type: 'request_failed' }));
+    } catch {
+      // A failed diagnostic sink must not prevent the error response.
+    }
     res.statusCode = 500;
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ error: 'Internal server error' }));
